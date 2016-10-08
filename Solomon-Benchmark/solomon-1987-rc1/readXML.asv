@@ -1,10 +1,13 @@
+
 % 批量读取数据
 list=dir(['C:\Users\beardollPC\Documents\DDVRPBTW\Solomon-Benchmark\solomon-1987-rc1\','*.xml']);
 fileAmount = length(list);
 for fileindex = 1:fileAmount
+
     % 读取xml文件
-    infilename =  list(fileindex).name;
-    % infilename = 'RC101_025.xml';   % 要读取文件名
+
+    infilename = 'RC101_025.xml';   % 要读取文件名
+
     try
         xDoc = xmlread(infilename);
     catch
@@ -80,15 +83,19 @@ for fileindex = 1:fileAmount
 
     % 保存为.mat格式
     S = regexp(infilename, '\.', 'split');  % 去掉.xml后缀
-    savefilename = char(S(1)); % 取出xml文件的名字作为mat文件的名称
-    save(strcat('C:\Users\beardollPC\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\', savefilename), 'cx', 'cy', 'depotx', 'depoty', 'start_time', 'end_time', 'quantity', 'service_time', 'capacity', 'max_travel_time');
+    savefilename = char(S(1));
+    save(savefilename, 'cx', 'cy', 'depotx', 'depoty', 'start_time', 'end_time', 'quantity', 'service_time', 'capacity', 'max_travel_time');
 end
 
+for fileindex = 1:fileAmount
+%      str= strcat ('F:\数据\', list(fileindex).name)
+%      a{i}=xlsread(str);
+
+ end
+ 
+%  save(filename, variables);  % filename可以指定路径
 
 
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 示例代码 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % allCoordinatesItems = xDoc.getElementsByTagName_r('node'); % 把坐标的数据给读取出来
 % for i = 0 : allCoordinatesItems.getLength - 1 % 每个node挨个读取
 %     thisItem = allCoordinatesItems(i);    % 当前node
@@ -105,6 +112,5 @@ end
 %     end    
 % end
 % allRequestItems = xDoc.getElementsByTagName_r('request');  % 读取时间窗、需求信息
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
