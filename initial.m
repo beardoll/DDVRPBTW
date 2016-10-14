@@ -87,6 +87,7 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
             initial_path(insert.pathindex) = selectpath;
         end
     end
+    initial_path = countArrivalTime(initial_path);
 end
 
 function [mark] = timeWindowJudge(insertpointindex, path, newcustomer)
@@ -131,4 +132,33 @@ function [c1] = computeCost(predecessor, newcustomer, successor, insertpointinde
     c1 = sqrt((predecessor.cx - newcustomer.cx)^2 + (predecessor.cy - newcustomer.cy)^2) +... 
          sqrt((newcustomer.cx - successor.cx)^2 + (newcustomer.cy - successor.cy)^2) -... 
          sqrt((predecessor.cx - successor.cx)^2 + (predecessor.cy - successor.cy)^2);  % 路长变化
+end
+
+function [newrouteset] = countArrivalTime(routeset)
+    % 计算route中每个顾客节点的货车到达时间
+    routelen = length(routeset);   % 路径数目，即车辆数
+    newrouteset = [];
+    for i = 1 : routelen
+        route = routeset(i).route;  % 当前路径
+        currenttime = 0; 
+        depot = route(1);
+        depot.arrival_time = 0;   % 仓库出发时间记为0
+        temp = [depot]; % temp存放增加货车到达时间后的路径
+        for j = 2 : length(route) - 1
+            predecessor = route(j-1);  % 前继节点
+            currentnode = route(j); % 当前
+            currenttime = currenttime + sqrt((predecessor.cx - currentnode.cx)^2 + (predecessor.cy - currentnode.cy)^2);
+            currentnode.arrival_time = currenttime;  % 这里即为货车到达时间
+            if currenttime < currentnode.start_time  % 需要等待
+                currenttime = currentnode.start_time;
+            end
+            currenttime = currenttime + currentnode.service_time;  % 加上服务时间
+            temp = [temp, currentnode];
+        end
+        temp = [temp, depot];
+        node.route = temp;
+        node.quantityL = routeset(i).quantityL;
+        node.quantityB = routeset(i).quantityB;
+        newrouteset = [newrouteset, node];
+    end
 end

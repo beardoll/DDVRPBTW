@@ -6,12 +6,16 @@ load(path);
 % drawRoute(initial_path)
 for i = 1:length(initial_path)
     route = initial_path(i).route;
-    [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(route);
-    if mark == 0
-        fprintf('timewindow violation!');
-    end
+%     [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(route);
+%     if mark == 0
+%         fprintf('timewindow violation!');
+%     end
     fprintf('...route %d ...\n', i);
-    timeslot, starttimearray, endtimearray
+%     timeslot, starttimearray, endtimearray
+    for j = 1:length(route)
+        fprintf('-------------node %d, arrival time:%f\n', route(j).index, route(j).arrival_time);
+    end
+    fprintf('\n')
 end
 
 
