@@ -16,9 +16,13 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
     else
         candidate = [candidate, LHs(min_len+1 : end)];
     end
+    depot.carindex = 1;
     pathnode.route = [depot candidate(1) depot];  % 先将candidate的第一个节点放入到路径中
     pathnode.quantityL = candidate(1).quantity;  % LHs的总重量
     pathnode.quantityB = 0;  % BHs的总重量
+    pathnode.index = 1;  % 货车编号
+    pathnode.nodexindex = [candidate(1).index];  % 该条路径所拥有的顾客节点的编号，注意按顺序排列
+    carindex = 1;
     initial_path = [initial_path, pathnode];
     for k = 2:length(candidate)
         cost = inf;
@@ -62,6 +66,9 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
             end
         end
         if cost == inf % 没有可行插入点
+            carindex = carindex + 1;
+            depot.carindex = carindex;
+            curnode.carindex = carindex;
             pathnode.route = [depot, curnode, depot]; % 建立一条新路径
             if curnode.type == 'L'
                 pathnode.quantityL = curnode.quantity;
@@ -70,12 +77,20 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
                 pathnode.quantityB = curnode.quantity;
                 pathnode.quantityL = 0;
             end
+            pathnode.index = carindex; % 为每条路径标注其所属车辆
+            pathnode.nodeindex = [curnode.index];
             initial_path = [initial_path, pathnode];
         else  % 插入到代价最小处，并更新路径
             selectpath = initial_path(insert.pathindex);
             selectpath_route = selectpath.route;
             temp = [];
+            nodeindex = selectpath.nodeindex;
+            tempnodeindex = [];
+            tempnodeindex = [tempnodeindex, selectpath.nodeindex(1:insert.insertpointindex)];
+            tempnodeindex = [tempnodeindex, curnode.index];
+            tempnodeindex = [tempnodeindex, selectpath.nodeindex(insert.insertpointindex+1 : end)];
             temp = [temp, selectpath_route(1:insert.insertpointindex)];
+            curnode.carindex = selectpath.index;  % 为每个顾客标注其所属车辆
             temp = [temp, curnode];
             temp = [temp, selectpath_route(insert.insertpointindex+1 : end)];
             if curnode.type == 'L'
@@ -84,6 +99,7 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
                 selectpath.quantityB = selectpath.quantityB + curnode.quantity;
             end
             selectpath.route = temp;
+            selectpath.nodeindex = tempnodeindex;
             initial_path(insert.pathindex) = selectpath;
         end
     end
