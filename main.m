@@ -3,6 +3,17 @@ path = 'C:\Users\cfinsbear\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC10
 load(path);
 [LHs, BHs, depot] = seperateCustomer(path, 0.3);
 [initial_path] = initial(LHs, BHs, depot, capacity);
+n = length(cx);
+distmat = zeros(n,n);
+for i = 1:n
+    for j = i+1:n
+        distmat(i,j) = sqrt((cx(i)-cx(j))^2+(cy(i)-cy(j))^2);
+        distmat(j,i) = distmat(i,j);
+    end
+end
+dmax = max(max(distmat));
+quantitymax = max(quantity);
+[final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax)
 % drawRoute(initial_path)
 for i = 1:length(initial_path)
     route = initial_path(i).route;
