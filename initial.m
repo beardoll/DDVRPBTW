@@ -49,7 +49,7 @@ function [initial_path] = initial(LHs, BHs, depot, capacity)
                             end
                         end
                     case 'B'
-                       if predecessor.type == 'L' && successor.type == 'B' || predecessor.type == 'B'
+                       if predecessor.type == 'L' && successor.type == 'B' || predecessor.type == 'L' && successor.type == 'D' || predecessor.type == 'B'
                             if curpath.quantityB + curnode.quantity <= capacity % 满足容量约束
                                 % 再判断是否满足时间窗约束
                                 if timeWindowJudge(insertpointindex, curroute, curnode) == 1 % 满足时间窗约束

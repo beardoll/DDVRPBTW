@@ -1,139 +1,148 @@
-function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax)
+% function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax)
+function [] = ALNS()
+    [n, maxd, maxt, maxquantity, capacity, routeset] = ALNStestbench()
+    % [result, removednode] = removeNodeInRoute([3,7], routeset)
+    % [reducedcost] = computeReducedCost(routeset, [1,4,6,7], n)
+    [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(routeset, 4, 5, n, maxd, maxt, maxquantity);
+    fprintf('...');
+
+
+
     % adaptive large neighbor search algorithm
-    removeheuristicnum = 3;  % remove algorithm的数量
-    insertheuristicnum = 2;  % insert algorithm的数量
-    removeprob = 1/removeheuristicnum * (1/removeheuristicnum); % 各个remove algorithm的概率
-    insertprob = 1/insertheuristicnum * (1/insertheuristicnum); % 各个insert algorihtm的概率
-    maxiter = 25000;  % 总的迭代次数
-    segment = 100;  % 每隔一个segment更新removeprob和insertprob
-    curpath = initial_path;
-    curcost = routecost(initial_path);
-    curglobalmincost = curcost; % 当前全局最优解
-    initialroutecode = routecode(initial_path);  % 把初始解编码，用来生成harsh key
-    hashtable = [];
-    hashtable = [hashtable, hash(initialroutecode,'MD2')];
-    noiseprobability = 0.5;  % 在计算插入代价时添加噪声的概率 
-    T = w*curcost / log(2);  % 初始温度
-    r,q,p,dmax,tmax,quantitymax,eta,c;  % 需要定义的参数
-    for iter = 1:maxiter
-        % 产生随机数选取remove算子和insert算子
-        if mod(iter, segment) == 1  % 开始新的segment，应该要将加分相关的变量全部清零
-            if iter ~= 1  % 如果不是刚开始，则应该更新各算子的概率
-                for i = 1:removeheusticnum
-                    removeprob(i) = removeprob(i) * (1-r) + r * removescore(i)/removeusefrequency(i);
-                end
-                for j = 1:insertheuristicnum
-                    insertprob(j) = insertprob(j) * (1-r) + r * insertprob(j)/insertusefrequency(j);
-                end
-                removeprob = removeprob / sum(removeprob); % 归一化
-                insertprob = insertprob / sum(insertprob);
-                noiseprob = noiseprob * (1-r) + r * noiseaddscore(1) / noiseaddfrequency;
-                noiseprobnot = (1-noiseprob) * (1-r) + r * noiseaddscore(2) / (segment - noiseaddfrequency);
-                noiseprobability = noiseprob/(noiseprob + noiseprobnot);
-            end
-            removescore = zeros(1,removeheuristicnum);  % 各个remove算子在当前segment中的评分
-            insertscore = zeros(1,insertheuristicnum);  % 各个insert算子在当前segment中的评分
-            removeusefrequency = zeros(1,removeheuristicnum); % 各个remove算子使用的次数
-            insertusefrequency = zeros(1,insertheuristicnum); % 各个insert算子使用的次数
-            noiseaddfrequency = 0;  % 噪声使用的次数
-            noiseaddscore = zeros(1,2);  % 第1个元素是加噪声的得分，第2个元素是不加噪声的得分 
-        end 
-        removeselect = rand;
-        removeindex = 1;
-        while sum(removeprob(1:removeindex)) < removeselect 
-            removeindex = removeindex + 1;
-        end
-        insertselect = rand;
-        insertindex = 1;
-        while sum(insertprob(1:insertindex)) < insertselect
-            insertindex = insertindex + 1;
-        end
-        removeusefrequency(removeindex) = removeusefrequency(removeindex) + 1;
-        insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;
-        switch removeindex
-            case 1
-                tmax = countMaxValue(curpath);
-                [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(curpath, q, p, n, dmax, tmax, quantitymax)
-            case 2
-                randomRemoval(curpath, q, n)
-            case 3
-                [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(curpath, q, p, n)
-        end
-        switch insertindex
-            case 1
-                if noiseprobability > rand 
-                    noiseadd = 1;
-                    noiseaddfrequency = noiseaddfrequency + 1;
-                else
-                    noiseadd = 0;
-                end
-                [completeroute] = greedyInsert(removedrequestnode, removedpath, capacity, noiseadd, noiseamount)
-            case 2
-                if noiseprobability > rand 
-                    noiseadd = 1;
-                    noiseaddfrequency = noiseaddfrequency + 1;
-                else
-                    noiseadd = 0;
-                end
-                [completeroute] = regretInsert(removedrequestnode, removedpath, capacity, noiseadd, noiseamount)
-        end
-        newcost = routecost(completeroute);
-        acceptprobability = exp(-(newcost - curcost)/T);
-        accept = 0;
-        if acceptprobability > rand
-            accept = 1;
-        end
-        T = T * c;  % 降温
-        newroutecode = routecode(completeroute);
-        newroutehashkey = hash(newroutecode, 'MD2');
-        % 接下来判断是否需要加分
-        % 加分情况如下：
-        % 1. 当得到一个全局最优解时
-        % 2. 当得到一个尚未被接受过的更好的解
-        % 3. 当得到一个尚未被接受过的解，虽然这个解比当前解差，但是这个解被接受了
-        if newcost < curglobalmincost   
-            removescore(removeindex) = removescore(removeindex) + 1;
-            insertscore(insertindex) = insertscore(insertindex) + 1;
-            curglobalmincost = newcost;
-            if noiseadd == 1
-                noiseaddscore(1) = noiseaddscore(1) + 1;
-            else
-                noiseaddscore(2) = noiseaddscore(2) + 1;
-            end
-        else
-            if ismember(newroutehashkey, hashtable) == 0  % 该路径还没有被接受过
-                if newcost < curcost  % 得到了一个更好的解，加分
-                    removescore(removeindex) = removescore(removeindex) + 1;
-                    insertscore(insertindex) = insertscore(insertindex) + 1;
-                    if noiseadd == 1
-                        noiseaddscore(1) = noiseaddscore(1) + 1;
-                    else
-                        noiseaddscore(2) = noiseaddscore(2) + 1;
-                    end
-                else
-                    if accept == 1  % 虽然得到了一个不太好的解，但是被接受了，加分
-                        hashtable = [hashtable, newroutehashkey];
-                        removescore(removeindex) = removescore(removeindex) + 1;
-                        insertscore(insertindex) = insertscore(insertindex) + 1;
-                        if noiseadd == 1
-                            noiseaddscore(1) = noiseaddscore(1) + 1;
-                        else
-                            noiseaddscore(2) = noiseaddscore(2) + 1;
-                        end
-                    end
-                end
-            end
-        end
-        if accept == 1  % 如果被接受了，先判断当前解是否在hashtable中，若无，则添加到hashtable中
-            if ismember(newroutehashkey, hashtable) == 0  % 该路径还没有被接受过
-                hashtable = [hashtable, newroutehashkey];
-            end
-            curcost = newcost;  % 更新当前的cost
-            curpath = completeroute;  % 更新当前的path
-        end            
-    end
-    final_path = curpath;
-    final_cost = curcost;
+%     removeheuristicnum = 3;  % remove algorithm的数量
+%     insertheuristicnum = 2;  % insert algorithm的数量
+%     removeprob = 1/removeheuristicnum * (1/removeheuristicnum); % 各个remove algorithm的概率
+%     insertprob = 1/insertheuristicnum * (1/insertheuristicnum); % 各个insert algorihtm的概率
+%     maxiter = 25000;  % 总的迭代次数
+%     segment = 100;  % 每隔一个segment更新removeprob和insertprob
+%     curpath = initial_path;
+%     curcost = routecost(initial_path);
+%     curglobalmincost = curcost; % 当前全局最优解
+%     initialroutecode = routecode(initial_path);  % 把初始解编码，用来生成harsh key
+%     hashtable = [];
+%     hashtable = [hashtable, hash(initialroutecode,'MD2')];
+%     noiseprobability = 0.5;  % 在计算插入代价时添加噪声的概率 
+%     T = w*curcost / log(2);  % 初始温度
+%     r,q,p,dmax,tmax,quantitymax,eta,c;  % 需要定义的参数
+%     for iter = 1:maxiter
+%         % 产生随机数选取remove算子和insert算子
+%         if mod(iter, segment) == 1  % 开始新的segment，应该要将加分相关的变量全部清零
+%             if iter ~= 1  % 如果不是刚开始，则应该更新各算子的概率
+%                 for i = 1:removeheusticnum
+%                     removeprob(i) = removeprob(i) * (1-r) + r * removescore(i)/removeusefrequency(i);
+%                 end
+%                 for j = 1:insertheuristicnum
+%                     insertprob(j) = insertprob(j) * (1-r) + r * insertprob(j)/insertusefrequency(j);
+%                 end
+%                 removeprob = removeprob / sum(removeprob); % 归一化
+%                 insertprob = insertprob / sum(insertprob);
+%                 noiseprob = noiseprob * (1-r) + r * noiseaddscore(1) / noiseaddfrequency;
+%                 noiseprobnot = (1-noiseprob) * (1-r) + r * noiseaddscore(2) / (segment - noiseaddfrequency);
+%                 noiseprobability = noiseprob/(noiseprob + noiseprobnot);
+%             end
+%             removescore = zeros(1,removeheuristicnum);  % 各个remove算子在当前segment中的评分
+%             insertscore = zeros(1,insertheuristicnum);  % 各个insert算子在当前segment中的评分
+%             removeusefrequency = zeros(1,removeheuristicnum); % 各个remove算子使用的次数
+%             insertusefrequency = zeros(1,insertheuristicnum); % 各个insert算子使用的次数
+%             noiseaddfrequency = 0;  % 噪声使用的次数
+%             noiseaddscore = zeros(1,2);  % 第1个元素是加噪声的得分，第2个元素是不加噪声的得分 
+%         end 
+%         removeselect = rand;
+%         removeindex = 1;
+%         while sum(removeprob(1:removeindex)) < removeselect 
+%             removeindex = removeindex + 1;
+%         end
+%         insertselect = rand;
+%         insertindex = 1;
+%         while sum(insertprob(1:insertindex)) < insertselect
+%             insertindex = insertindex + 1;
+%         end
+%         removeusefrequency(removeindex) = removeusefrequency(removeindex) + 1;
+%         insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;
+%         switch removeindex
+%             case 1
+%                 tmax = countMaxValue(curpath);
+%                 [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(curpath, q, p, n, dmax, tmax, quantitymax)
+%             case 2
+%                 randomRemoval(curpath, q, n)
+%             case 3
+%                 [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(curpath, q, p, n)
+%         end
+%         switch insertindex
+%             case 1
+%                 if noiseprobability > rand 
+%                     noiseadd = 1;
+%                     noiseaddfrequency = noiseaddfrequency + 1;
+%                 else
+%                     noiseadd = 0;
+%                 end
+%                 [completeroute] = greedyInsert(removedrequestnode, removedpath, capacity, noiseadd, noiseamount)
+%             case 2
+%                 if noiseprobability > rand 
+%                     noiseadd = 1;
+%                     noiseaddfrequency = noiseaddfrequency + 1;
+%                 else
+%                     noiseadd = 0;
+%                 end
+%                 [completeroute] = regretInsert(removedrequestnode, removedpath, capacity, noiseadd, noiseamount)
+%         end
+%         newcost = routecost(completeroute);
+%         acceptprobability = exp(-(newcost - curcost)/T);
+%         accept = 0;
+%         if acceptprobability > rand
+%             accept = 1;
+%         end
+%         T = T * c;  % 降温
+%         newroutecode = routecode(completeroute);
+%         newroutehashkey = hash(newroutecode, 'MD2');
+%         % 接下来判断是否需要加分
+%         % 加分情况如下：
+%         % 1. 当得到一个全局最优解时
+%         % 2. 当得到一个尚未被接受过的更好的解
+%         % 3. 当得到一个尚未被接受过的解，虽然这个解比当前解差，但是这个解被接受了
+%         if newcost < curglobalmincost   
+%             removescore(removeindex) = removescore(removeindex) + 1;
+%             insertscore(insertindex) = insertscore(insertindex) + 1;
+%             curglobalmincost = newcost;
+%             if noiseadd == 1
+%                 noiseaddscore(1) = noiseaddscore(1) + 1;
+%             else
+%                 noiseaddscore(2) = noiseaddscore(2) + 1;
+%             end
+%         else
+%             if ismember(newroutehashkey, hashtable) == 0  % 该路径还没有被接受过
+%                 if newcost < curcost  % 得到了一个更好的解，加分
+%                     removescore(removeindex) = removescore(removeindex) + 1;
+%                     insertscore(insertindex) = insertscore(insertindex) + 1;
+%                     if noiseadd == 1
+%                         noiseaddscore(1) = noiseaddscore(1) + 1;
+%                     else
+%                         noiseaddscore(2) = noiseaddscore(2) + 1;
+%                     end
+%                 else
+%                     if accept == 1  % 虽然得到了一个不太好的解，但是被接受了，加分
+%                         hashtable = [hashtable, newroutehashkey];
+%                         removescore(removeindex) = removescore(removeindex) + 1;
+%                         insertscore(insertindex) = insertscore(insertindex) + 1;
+%                         if noiseadd == 1
+%                             noiseaddscore(1) = noiseaddscore(1) + 1;
+%                         else
+%                             noiseaddscore(2) = noiseaddscore(2) + 1;
+%                         end
+%                     end
+%                 end
+%             end
+%         end
+%         if accept == 1  % 如果被接受了，先判断当前解是否在hashtable中，若无，则添加到hashtable中
+%             if ismember(newroutehashkey, hashtable) == 0  % 该路径还没有被接受过
+%                 hashtable = [hashtable, newroutehashkey];
+%             end
+%             curcost = newcost;  % 更新当前的cost
+%             curpath = completeroute;  % 更新当前的path
+%         end            
+%     end
+%     final_path = curpath;
+%     final_cost = curcost;
 end
 
 %% ------------------------ removal algorithms ---------------------- %%
@@ -161,7 +170,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
     temp = [];
     for i = 1:K  % 先把所有节点的放到一个临时向量temp中
         curroute = solutions(i).route;
-        for j = 2 : length(curroute - 1)
+        for j = 2 : length(curroute) - 1
             temp = [temp, curroute(j)];
         end
     end
@@ -173,7 +182,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
             node2index = node2.index;
             R(node1index, node2index) = phi * sqrt((node1.cx - node2.cx)^2 + (node1.cy - node2.cy)^2)/dmax + ...
                                         kai * abs(node1.arrival_time - node2.arrival_time)/tmax + ...
-                                        psi * abs(node1.quantity - node2.quantity);
+                                        psi * abs(node1.quantity - node2.quantity)/quantitymax;
             R(node2index, node1index) = R(node1index, node2index);
         end
     end
@@ -186,14 +195,15 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
         % 将相近程度从低到高进行排序
         % 只考虑尚在路径中的节点
         y = rand;
-        removenum = y^p * length(nodeindexinroute);  % 移除的request的数量
+        removenum = ceil(y^p * length(nodeindexinroute));  % 移除的request的数量
         removenodeindex = nodeindexinroute(sortRindex(1:removenum)); % 被移除的路径节点的编号
         nodeindexinroute = setdiff(nodeindexinroute, removenodeindex);
         D = [D, removenodeindex];
-        selectednodenum = randi(nodeindexinroute);  % 再次随机选取一个request
+        randompos = randi([1 length(nodeindexinroute)]);
+        selectednodenum = nodeindexinroute(randompos);  % 再次随机选取一个request
     end
     % 现在对D中的编号进行映射，移除掉各条路径中的D中的元素
-    [solutions, DD] = removeNodeInRoute(D, solutions)
+    [solutions, DD] = removeNodeInRoute(D, solutions);
     removedpath = solutions;
     removedrequestnode = DD;
     removedrequestindex = D; 
@@ -243,7 +253,7 @@ function [result, removednode] = removeNodeInRoute(removenodeindex, routeset)
     % routeset: 所有的路径集合
     D = removenodeindex;
     DD = [];
-    for i = 1:K
+    for i = 1:length(routeset)
         curpath = routeset(i);
         curroute = curpath.route;
         [curremovednodeindex, curremovenodepos] = intersect(curpath.nodeindex, D);  % 找出被移除的节点编号
@@ -270,11 +280,13 @@ function [reducedcost] = computeReducedCost(routeset, nodeindexset, n)
     reducedcost = inf(1,n);  % 没有被计算的node的移除代价记为inf
     for i = 1:length(routeset)
         curroute = routeset(i).route;
-        for j = 2:length(curroute)-1
-            predecessor = curroute(j-1);
-            curnode = curroute(j);
-            successor = curroute(j+1);
-            nodeindex = curroute(j).index;
+        computednodeindex = intersect(routeset(i).nodeindex, nodeindexset); % 此路径中需要计算reducedcost的节点下标
+        for j = 1:length(computednodeindex)
+            nodeindex = computednodeindex(j);
+            pos = find(routeset(i).nodeindex == nodeindex);
+            predecessor = curroute(pos);
+            curnode = curroute(pos+1);
+            successor = curroute(pos+2);
             temp = -sqrt((predecessor.cx-curnode.cx)^2 + (predecessor.cy-curnode.cy)^2) -...
                    sqrt((successor.cx-curnode.cx)^2 + (successor.cy-curnode.cy)^2) +...
                    sqrt((predecessor.cx-successor.cx)^2 + (predecessor.cy-successor.cy)^2);
@@ -288,7 +300,7 @@ end
 function [completeroute] = greedyInsert(removednode, removedroute, capacity, noiseadd, noiseamount)
     % 贪婪算法，每次都寻找最好的点插入
     % 把removednode插入到removedroute中
-    alreadyinsert = []
+    alreadyinsert = [];
     [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removednode, removedroute, capacity, noiseadd, noiseamount);
     while length(alreadyinsert) < length(removednode)
         m = length(nodeset);
@@ -296,8 +308,8 @@ function [completeroute] = greedyInsert(removednode, removedroute, capacity, noi
         mincost = min(min(bestinsertcostperroute));
         index = find(bestinsertcostperroute == mincost);
         index = index(1);
-        col = mod(index, m);
-        row = index - m*(col-1);
+        col = mod(index, m);  % 最小插入代价所在列（车辆编号）
+        row = index - m*(col-1); % 最小插入代价所在行（节点编号，在removednode中的位置）
         if row == 0
             row = m;
             col = col - 1;
@@ -307,7 +319,7 @@ function [completeroute] = greedyInsert(removednode, removedroute, capacity, noi
         selectednode.carindex = col;   % 所属货车
         bestinsertcostperroute(row,:) = inf;  % 该节点已不在待插入序列中，故将其所有插入代价置为inf
         insertpointindex = bestinsertinfo(row, col); % 最佳插入点
-        nodeindexinroute = removedroute(col).nodeindex;
+        nodeindexinroute = removedroute(col).nodeindex;  % 要插入的路径中其所拥有的节点编号（全局）
         temp = [];
         temp = [temp, nodeindexinroute(1:insertpointindex)];
         temp = [temp, selectednode.index];
@@ -345,7 +357,7 @@ function [completeroute] = regretInsert(removednode, removedroute, capacity, noi
     m = length(removednode);
     [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removednode, removedroute, capacity);
     while length(alreadyinsert) < length(removednode)
-        costdiffarr = [];
+        costdiffarr = [];  % 存放每个节点最好和最差插入点之差
         for i = 1:length(removednode)
             tempbest = bestinsertcostperroute;
             if ismember(i,alreadyinsert) == 0  % 已插入不做考虑
@@ -368,12 +380,12 @@ function [completeroute] = regretInsert(removednode, removedroute, capacity, noi
                     costdiffarr = [costdiffarr, abs(best1(1) - best3(1))];
                 end
             else
-                costdiffarr = [costdiffarr, -inf];
+                costdiffarr = [costdiffarr, -inf];  % 已经插入到路径中的节点，其代价差赋为-∞
             end
         end
         [maxdiff, maxdiffindex] = max(costdiffarr);
-        nodeindex = maxdiffindex(1);
-        [mincost, mincostindex] = min(min(bestinsertcostperroute));
+        nodeindex = maxdiffindex(1);  % 当前regret cost最大的点的下标（在removednode中位置）
+        [mincost, mincostindex] = min(bestinsertcostperroute(nodeindex,:)); 
         mincostindex = mincostindex(1);
         col = mod(mincostindex, m);
         row = mincostindex - (col-1) * m;
@@ -452,7 +464,7 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
                                            sqrt((insertnode.cx-successor.cx)^2 + (insertnode.cy-successor.cy)^2);
                                     if noiseadd == 1
                                         noise = -noiseamount + 2*noiseamount*rand;
-                                        temp = temp + noise;
+                                        temp = max(temp + noise,0);
                                     end
                                     if temp < mininsertcost
                                         mininsertcost = temp;
@@ -464,7 +476,7 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
                             end
                         end
                     case 'B'
-                        if insertnode.type == 'L' && successor.type == 'B' || insertnode.type == 'B'
+                        if insertnode.type == 'L' && successor.type == 'B' || insertnode.type == 'L' && successor.type == 'D' ||insertnode.type == 'B'
                             if curpath.quantityB + curnode.quantity < capacity  % 满足容量约束
                                 if timeWindowJudge(k, curroute, curnode) == 1   % 满足时间窗约束
                                     temp = sqrt((insertnode.cx-curnode.cx)^2 + (insertnode.cy-curnode.cy)^2) +...
@@ -472,7 +484,7 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
                                            sqrt((insertnode.cx-successor.cx)^2 + (insertnode.cy-successor.cy)^2);
                                     if noiseadd == 1
                                         noise = -noiseamount + 2*noiseamount*rand;
-                                        temp = temp + noise;
+                                        temp = max(temp + noise,0);
                                     end   
                                     if temp < mininsertcost
                                         mininsertcost = temp;
@@ -498,6 +510,10 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
     % mark = 0 表示对应的节点已经插入过，否则为插入过
     % quantityL, quantityB: 该路径上的LHs和BHs的货物量
     m = length(nodeset);
+    bestinsertcostarr = inf(1,m);
+    bestinsertinfoarr = -1 * ones(1,m);
+    secondinsertcostarr = inf(1,m);
+    secondinsertinfoarr = -1 * ones(1,m);
     for i = 1:m
         curnode = nodeset(i);
         mininsertcost = inf;
@@ -518,7 +534,7 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                            sqrt((insertnode.cx-successor.cx)^2 + (insertnode.cy-successor.cy)^2);
                                     if noiseadd == 1
                                         noise = -noiseamount + 2*noiseamount*rand;
-                                        temp = temp + noise;
+                                        temp = max(temp + noise,0);
                                     end
                                     if temp < mininsertcost
                                         mininsertcost = temp;
@@ -530,7 +546,7 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                             end
                         end
                     case 'B'
-                        if insertnode.type == 'L' && successor.type == 'B' || insertnode.type == 'B'
+                        if insertnode.type == 'L' && successor.type == 'B' || insertnode.type == 'L' && successor.type == 'D' || insertnode.type == 'B'
                             if quantityB + curnode.quantity < capacity  % 满足容量约束
                                 if timeWindowJudge(j, curroute, curnode) == 1   % 满足时间窗约束
                                     temp = sqrt((insertnode.cx-curnode.cx)^2 + (insertnode.cy-curnode.cy)^2) +...
@@ -538,7 +554,7 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                            sqrt((insertnode.cx-successor.cx)^2 + (insertnode.cy-successor.cy)^2);
                                     if noiseadd == 1
                                         noise = -noiseamount + 2*noiseamount*rand;
-                                        temp = temp + noise;
+                                        temp = max(temp + noise,0);
                                     end   
                                     if temp < mininsertcost
                                         mininsertcost = temp;
