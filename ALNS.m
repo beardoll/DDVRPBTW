@@ -149,13 +149,13 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
     % 每次循环移除的request数量为y^p * |L|，L为移除某些节点后的当前路径
     phi = 9;
     kai = 3;
-    phi = 2;
+    psi = 2;
     K = length(solutions); % 车辆数
     % 下面是随机选取路径中的一个节点
     selectedrouteindex = randi([1,K]);  % 随机选取一条路径
     selectedroute = solutions(selectedrouteindex).route; % 随机选中的路径
     selectedroutelen = length(selectedroute) - 2;  % 去头去尾的长度
-    selectednodeindex = randi([1 selectedroutelen]);  % 随机选取该路径中的一个节点
+    selectednodeindex = randi([1,selectedroutelen]);  % 随机选取该路径中的一个节点
     selectednode = selectedroute(selectednodeindex + 1); % 注意第一个节点是仓库
     R = inf(n,n);  % 衡量节点之间的相近程度
     temp = [];
@@ -173,15 +173,16 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
             node2index = node2.index;
             R(node1index, node2index) = phi * sqrt((node1.cx - node2.cx)^2 + (node1.cy - node2.cy)^2)/dmax + ...
                                         kai * abs(node1.arrival_time - node2.arrival_time)/tmax + ...
-                                        phi * abs(node1.quantity - node2.quantity);
+                                        psi * abs(node1.quantity - node2.quantity);
             R(node2index, node1index) = R(node1index, node2index);
         end
     end
     D = [selectednode.index];  % D存储的是被移除节点的编号
     nodeindexinroute = setdiff(1:n, selectednode.index);  % 尚在路径中的节点编号
+    selectednodenum = selectednode.index;
     while length(D) < q
         % 一直循环执行到D中的request数量为q为止
-        [sortR, sortRindex] = sort(R(selectednodeindex, nodeindexinroute), 'ascend');  
+        [sortR, sortRindex] = sort(R(selectednodenum, nodeindexinroute), 'ascend');  
         % 将相近程度从低到高进行排序
         % 只考虑尚在路径中的节点
         y = rand;
@@ -189,7 +190,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
         removenodeindex = nodeindexinroute(sortRindex(1:removenum)); % 被移除的路径节点的编号
         nodeindexinroute = setdiff(nodeindexinroute, removenodeindex);
         D = [D, removenodeindex];
-        selectednodeindex = randi(nodeindexinroute);  % 再次随机选取一个request
+        selectednodenum = randi(nodeindexinroute);  % 再次随机选取一个request
     end
     % 现在对D中的编号进行映射，移除掉各条路径中的D中的元素
     [solutions, DD] = removeNodeInRoute(D, solutions)
@@ -208,7 +209,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = randomRemoval(
         selectednodeindex = [selectednodeindex, curselected];
         allnodeindex = setdiff(allnodeindex, curselected);
     end
-    [result, removednode] = removeNodeInRoute(selectednodeindex, solutions)
+    [result, removednode] = removeNodeInRoute(selectednodeindex, solutions);
     removedpath = result;
     removedrequestnode = removednode;
     removedrequestindex = selectednodeindex;
@@ -224,7 +225,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(s
         [reducedcost] = computeReducedCost(solutions, nodeindexset, n);
         [sortreducedcost, sortindex] = sort(reducedcost, 'ascend');
         y = rand;
-        removenodeindex = sortindex(y^p*length(nodeindexset));
+        removenodeindex = sortindex(1:y^p*length(nodeindexset));
         DD = [DD, removenodeindex];
         [result, removednode] = removeNodeInRoute(removenodeindex, solutions);
         solutions = result;  % 移除节点后更新路径
@@ -240,6 +241,7 @@ end
 function [result, removednode] = removeNodeInRoute(removenodeindex, routeset)
     % removenodeindex: 要移除的节点编号
     % routeset: 所有的路径集合
+    D = removenodeindex;
     DD = [];
     for i = 1:K
         curpath = routeset(i);
@@ -247,17 +249,17 @@ function [result, removednode] = removeNodeInRoute(removenodeindex, routeset)
         [curremovednodeindex, curremovenodepos] = intersect(curpath.nodeindex, D);  % 找出被移除的节点编号
         for j = 1:length(curremovenodepos)  % 逐个节点进行移除，注意同步更新quantityL和quantityB
             curnode = curroute(curremovenodepos(j)+1);  % 注意第一个节点是depot，nodeindex中只有顾客节点的编号
-            DD = [DD, curnode]
+            DD = [DD, curnode];
             if (curnode.type == 'L')
                 curpath.quantityL = curpath.quantityL - curnode.quantity;
             else
                 curpath.quantityB = curpath.quantityB - curnode.quantity;
             end
         end
-        curpath.nodeindex = curremovednodeindex;
+        curpath.nodeindex = setdiff(curpath.nodeindex, curremovednodeindex);  % 更新路径中的node下标
         curroute(curremovenodepos+1) = [];  % 一次性移除掉所有需要移除的节点
-        curpath.route = curroute
-        routeset(i) = curpath
+        curpath.route = curroute;
+        routeset(i) = curpath;
     end
     result = routeset;
     removednode = DD;
@@ -265,7 +267,7 @@ end
 
 function [reducedcost] = computeReducedCost(routeset, nodeindexset, n)
     % 计算routeset中所有节点的移除代价（即移除掉它之后带来的路径代价变化量）
-    reducedcost = inf(1,n);
+    reducedcost = inf(1,n);  % 没有被计算的node的移除代价记为inf
     for i = 1:length(routeset)
         curroute = routeset(i).route;
         for j = 2:length(curroute)-1
