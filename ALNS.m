@@ -4,6 +4,13 @@ function [] = ALNS()
     % [result, removednode] = removeNodeInRoute([3,7], routeset)
     % [reducedcost] = computeReducedCost(routeset, [1,4,6,7], n)
     [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(routeset, 4, 5, n, maxd, maxt, maxquantity);
+%     [removedpath, removedrequestnode, removedrequestindex] = randomRemoval(routeset, 4, n)
+%     [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(routeset, 4, 5, n)
+%    [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removedrequestnode, removedpath, capacity, 0, 0)
+%     mark = ones(1,length(removedrequestnode));
+%     [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = ...
+%         computeInsertCostInARoute(removedrequestnode, removedpath(2).route, removedpath(2).quantityL, removedpath(2).quantityB, capacity, mark, 0, 0)
+    [completeroute] = greedyInsert(removedrequestnode, removedpath, capacity, 0, 0)
     fprintf('...');
 
 
@@ -215,7 +222,8 @@ function [removedpath, removedrequestnode, removedrequestindex] = randomRemoval(
     allnodeindex = 1:n;  % 所有节点的编号
     selectednodeindex = [];
     while length(selectednodeindex) < q   % 随机产生q个request的编号
-        curselected = randi(allnodeindex);
+        randomvalue = randi([1 length(allnodeindex)]);
+        curselected = allnodeindex(randomvalue);
         selectednodeindex = [selectednodeindex, curselected];
         allnodeindex = setdiff(allnodeindex, curselected);
     end
@@ -235,7 +243,7 @@ function [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(s
         [reducedcost] = computeReducedCost(solutions, nodeindexset, n);
         [sortreducedcost, sortindex] = sort(reducedcost, 'ascend');
         y = rand;
-        removenodeindex = sortindex(1:y^p*length(nodeindexset));
+        removenodeindex = sortindex(1:ceil(y^p*length(nodeindexset)));
         DD = [DD, removenodeindex];
         [result, removednode] = removeNodeInRoute(removenodeindex, solutions);
         solutions = result;  % 移除节点后更新路径
@@ -300,30 +308,32 @@ end
 function [completeroute] = greedyInsert(removednode, removedroute, capacity, noiseadd, noiseamount)
     % 贪婪算法，每次都寻找最好的点插入
     % 把removednode插入到removedroute中
+    % 如果没有找到可行插入点，应该再立一条新的路径
     alreadyinsert = [];
     [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removednode, removedroute, capacity, noiseadd, noiseamount);
     while length(alreadyinsert) < length(removednode)
-        m = length(nodeset);
+        m = length(removednode);
         K = length(removedroute);
         mincost = min(min(bestinsertcostperroute));
         index = find(bestinsertcostperroute == mincost);
         index = index(1);
-        col = mod(index, m);  % 最小插入代价所在列（车辆编号）
+        col = floor(index/m)+1;  % 最小插入代价所在列（车辆编号）
         row = index - m*(col-1); % 最小插入代价所在行（节点编号，在removednode中的位置）
         if row == 0
             row = m;
             col = col - 1;
         end
+        row;
         alreadyinsert = [alreadyinsert, row];
         selectednode = removednode(row); % 此次被选中的节点
         selectednode.carindex = col;   % 所属货车
         bestinsertcostperroute(row,:) = inf;  % 该节点已不在待插入序列中，故将其所有插入代价置为inf
-        insertpointindex = bestinsertinfo(row, col); % 最佳插入点
+        insertpointindex = bestinsertinfo(row, col) % 最佳插入点
         nodeindexinroute = removedroute(col).nodeindex;  % 要插入的路径中其所拥有的节点编号（全局）
         temp = [];
-        temp = [temp, nodeindexinroute(1:insertpointindex)];
+        temp = [temp, nodeindexinroute(1:insertpointindex-1)];
         temp = [temp, selectednode.index];
-        temp = [temp, nodeindexinroute(insertpointindex+1:end)];
+        temp = [temp, nodeindexinroute(insertpointindex:end)];
         removedroute(col).nodeindex = temp;
         selectedroute = removedroute(col).route;
         temp = [];
@@ -342,7 +352,7 @@ function [completeroute] = greedyInsert(removednode, removedroute, capacity, noi
         mark = ones(1,m);  % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsert) = 0;  % 已经插入过的节点置为0
         [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = ...
-            computeInsertCostInARoute(removednode, removedroute(col).route, removedroute(col).quantityL, removedroute(col).quantityB, capacity, mark)
+            computeInsertCostInARoute(removednode, removedroute(col).route, removedroute(col).quantityL, removedroute(col).quantityB, capacity, mark, noiseadd, noiseamount);
         bestinsertcostperroute(:,col) = bestinsertcostarr;
         bestinsertinfo(:,col) = bestinsertinfoarr;
     end
@@ -363,7 +373,7 @@ function [completeroute] = regretInsert(removednode, removedroute, capacity, noi
             if ismember(i,alreadyinsert) == 0  % 已插入不做考虑
                 [best1, index1] = min(tempbest(i,:));
                 for j = 1:length(index1)
-                    col = mod(index1, m);
+                    col = floor(index1/m)+1;
                     row = index1 - (m-1) * col;
                     if row == 0
                         row = m;
@@ -387,7 +397,7 @@ function [completeroute] = regretInsert(removednode, removedroute, capacity, noi
         nodeindex = maxdiffindex(1);  % 当前regret cost最大的点的下标（在removednode中位置）
         [mincost, mincostindex] = min(bestinsertcostperroute(nodeindex,:)); 
         mincostindex = mincostindex(1);
-        col = mod(mincostindex, m);
+        col = floor(mincostindex/m)+1;
         row = mincostindex - (col-1) * m;
         if row == 0
             row = m;
@@ -437,7 +447,7 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
     % bestinsertcostperroute: 各个节点在各条路径中的最小插入代价，secondxxx为次小
     % bestinsertinfo: 各个节点在各条路径的最小插入点信息，secondxxx为次小
     K = length(routeset);  % 车辆数目
-    m = length(nodeset)
+    m = length(nodeset);
     bestinsertcostperroute = [];
     bestinsertinfo = [];
     secondinsertcostperroute = [];
@@ -451,7 +461,7 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
             mininsert.insertpointindex = -1;
             secondinsertcost = inf;
             secondinsert.insertpointindex = -1;
-            for k = 1:length(curroute-1)
+            for k = 1:length(curroute) - 1
                 insertnode = curroute(k);  % 插入点，插入到此点后方
                 successor = curroute(k+1);
                 switch curnode.type
@@ -467,9 +477,9 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
                                         temp = max(temp + noise,0);
                                     end
                                     if temp < mininsertcost
-                                        mininsertcost = temp;
                                         secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”
-                                        secondinsert.insertpointindex = mininsert.insertpointindex;            
+                                        secondinsert.insertpointindex = mininsert.insertpointindex; 
+                                        mininsertcost = temp;           
                                         mininsert.insertpointindex = k;  % 插入点
                                     end
                                 end
@@ -487,9 +497,9 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
                                         temp = max(temp + noise,0);
                                     end   
                                     if temp < mininsertcost
-                                        mininsertcost = temp;
                                         secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”
-                                        secondinsert.insertpointindex = mininsert.insertpointindex;            
+                                        secondinsert.insertpointindex = mininsert.insertpointindex;     
+                                        mininsertcost = temp;       
                                         mininsert.insertpointindex = k;  % 插入点
                                     end
                                 end
@@ -505,22 +515,23 @@ function [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, seco
     end
 end
 
-function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = computeInsertCostInARoute(nodeset, route, quantityL, quantityB, capacity, mark)
+function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = computeInsertCostInARoute(nodeset, route, quantityL, quantityB, capacity, mark, noiseadd, noiseamount)
     % 计算nodeset中节点到route中的最小和次小插入代价
-    % mark = 0 表示对应的节点已经插入过，否则为插入过
+    % mark = 0 表示对应的节点已经插入过，否则未插入过
     % quantityL, quantityB: 该路径上的LHs和BHs的货物量
     m = length(nodeset);
     bestinsertcostarr = inf(1,m);
     bestinsertinfoarr = -1 * ones(1,m);
     secondinsertcostarr = inf(1,m);
     secondinsertinfoarr = -1 * ones(1,m);
+    curroute = route;
     for i = 1:m
         curnode = nodeset(i);
         mininsertcost = inf;
         mininsert.insertpointindex = -1;
         secondinsertcost = inf;
         secondinsert.insertpointindex = -1;
-        if mark(m) == 1  % 只考虑没有插入过的节点
+        if mark(i) == 1  % 只考虑没有插入过的节点
             for j = 1:length(route)-1
                 insertnode = route(j);  % 插入在该节点后面
                 successor = route(j+1); % 插入点后方
@@ -537,9 +548,9 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                         temp = max(temp + noise,0);
                                     end
                                     if temp < mininsertcost
-                                        mininsertcost = temp;
                                         secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”
-                                        secondinsert.insertpointindex = mininsert.insertpointindex;            
+                                        secondinsert.insertpointindex = mininsert.insertpointindex;  
+                                        mininsertcost = temp;          
                                         mininsert.insertpointindex = j;  % 插入点
                                     end
                                 end
@@ -557,9 +568,9 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                         temp = max(temp + noise,0);
                                     end   
                                     if temp < mininsertcost
-                                        mininsertcost = temp;
                                         secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”
-                                        secondinsert.insertpointindex = mininsert.insertpointindex;            
+                                        secondinsert.insertpointindex = mininsert.insertpointindex;  
+                                        mininsertcost = temp;          
                                         mininsert.insertpointindex = j;  % 插入点
                                     end
                                 end
