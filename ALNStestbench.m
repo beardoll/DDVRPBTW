@@ -73,3 +73,17 @@ function [n, maxd, maxt, maxquantity, capacity, routeset] = ALNStestbench()
         routeset = [routeset, routenode];
     end
 end
+
+%%%%%%%%%%%%%%%%%%%%%%% ²âÊÔALNSº¯Êý %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%     [n, maxd, maxt, maxquantity, capacity, routeset] = ALNStestbench()
+%     [result, removednode] = removeNodeInRoute([3,7], routeset)
+%     [reducedcost] = computeReducedCost(routeset, [1,4,6,7], n)
+%     [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(routeset, 4, 3, n, maxd, maxt, maxquantity);
+%     [removedpath, removedrequestnode, removedrequestindex] = randomRemoval(routeset, 4, n)
+%     [removedpath, removedrequestnode, removedrequestindex] = worstRemoval(routeset, 4, 3, n)
+%    [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removedrequestnode, removedpath, capacity, 0, 0)
+%     mark = ones(1,length(removedrequestnode));
+%     [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = ...
+%         computeInsertCostInARoute(removedrequestnode, removedpath(2).route, removedpath(2).quantityL, removedpath(2).quantityB, capacity, mark, 0, 0)
+%     [completeroute] = greedyInsert(removedrequestnode, removedpath, capacity, 0, 0)
+%     [completeroute] = regretInsert(removedrequestnode, removedpath, capacity, 0, 0)
