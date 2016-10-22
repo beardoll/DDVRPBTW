@@ -1,5 +1,5 @@
 clc;clear;
-path = 'C:\Users\cfinsbear\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_025';
+path = 'C:\Users\beardollPC\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_050';
 load(path);
 [LHs, BHs, depot] = seperateCustomer(path, 0.3);
 [initial_path] = initial(LHs, BHs, depot, capacity);
@@ -13,21 +13,24 @@ for i = 1:n
 end
 dmax = max(max(distmat));
 quantitymax = max(quantity);
-[final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax)
+[final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax, n)
+
+
+% ALNS(initial_path, capacity, dmax, quantitymax, n)
 % drawRoute(initial_path)
-for i = 1:length(initial_path)
-    route = initial_path(i).route;
-%     [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(route);
-%     if mark == 0
-%         fprintf('timewindow violation!');
+% for i = 1:length(initial_path)
+%     route = initial_path(i).route;
+% %     [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(route);
+% %     if mark == 0
+% %         fprintf('timewindow violation!');
+% %     end
+%     fprintf('...route %d ...\n', i);
+% %     timeslot, starttimearray, endtimearray
+%     for j = 1:length(route)
+%         fprintf('-------------node %d, arrival time:%f\n', route(j).index, route(j).arrival_time);
 %     end
-    fprintf('...route %d ...\n', i);
-%     timeslot, starttimearray, endtimearray
-    for j = 1:length(route)
-        fprintf('-------------node %d, arrival time:%f\n', route(j).index, route(j).arrival_time);
-    end
-    fprintf('\n')
-end
+%     fprintf('\n')
+% end
 
 
 
