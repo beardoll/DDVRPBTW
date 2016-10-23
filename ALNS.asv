@@ -343,14 +343,15 @@ function [completeroute] = greedyInsert(removednodeset, removedrouteset, capacit
     % 贪婪算法，每次都寻找最好的点插入
     % 把removednodeset插入到removedrouteset中
     % 如果没有找到可行插入点，应该再立一条新的路径
-    alreadyinsertposset = [];  % 已经插入的节点在removednodeset中的位置
+    alreadyinsert = [];
     [bestinsertcostperroute, bestinsertinfo, secondinsertcostperroute, secondinsertinfo] = computeInsertCostMap(removednode, removedroute, capacity, noiseadd, noiseamount);
-    while length(alreadyinsertposset) < length(removednodeset)
+    while length(alreadyinsert) < length(removednode)
         m = length(removednode);
+        K = length(removedroute);
         mincost = min(min(bestinsertcostperroute));
         if mincost == inf   % 所有剩余的待插入点都没有可行地方插入
-            restnodeposset = setdiff(1:m, alreadyinsert);  % 剩余可选节点在removednodeset中的位置
-            row = restnodeposset(1);
+            restnodepos = setdiff(1:m, alreadyinsert);  % 剩余可选节点
+            row = restnodepos(1);
             col = 1;  % 无所谓，因为会新建一条路径
         else
             index = find(bestinsertcostperroute == mincost);
@@ -362,8 +363,8 @@ function [completeroute] = greedyInsert(removednodeset, removedrouteset, capacit
                 col = col - 1;
             end
         end
-        alreadyinsertposset = [alreadyinsertposset, row];
-        selectednode = removednodeset(row); % 此次被选中的节点
+        alreadyinsert = [alreadyinsert, row];
+        selectednode = removednode(row); % 此次被选中的节点
         selectednode.carindex = col;   % 所属货车
         bestinsertcostperroute(row,:) = inf;  % 该节点已不在待插入序列中，故将其所有插入代价置为inf
         insertpointindex = bestinsertinfo(row, col); % 最佳插入点
