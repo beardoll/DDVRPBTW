@@ -14,6 +14,7 @@ end
 dmax = max(max(distmat));
 quantitymax = max(quantity);
 [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax, n)
+save('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_050.mat', 'final_path', 'final_cost', 'initial_path');
 
 
 % ALNS(initial_path, capacity, dmax, quantitymax, n)
