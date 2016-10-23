@@ -97,6 +97,8 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
         end
         removeusefrequency(removeindex) = removeusefrequency(removeindex) + 1;  % 使用到的remove算子其使用次数加一
         insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;  % 使用到的insert算子其使用次数加一
+        removeindex = 1;
+        insertindex = 1;
         switch removeindex
             case 1
                 tmax = countMaxValue(currouteset);
@@ -183,7 +185,8 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
             end
             curcost = newcost;  % 更新当前的cost
             currouteset = finalrouteset;  % 更新当前的path
-        end    
+        end  
+        save('C:\Users\beardollPC\Documents\DDVRPBTW\tempfinalrouteset', 'globalbestrouteset');
     end
     final_path = globalbestrouteset;
     final_cost = curglobalmincost;
@@ -257,7 +260,7 @@ function [removedrouteset, removednodeset, removednodeindexset] = randomRemoval(
     while length(D) < q   % 随机产生q个request的编号
         selectednodeindex = nodeindexinrouteset(randi([1 length(nodeindexinrouteset)]));  % 当前选中的节点编号
         D = [D, selectednodeindex];
-        nodeindexinrouteset = setdiff(nodeindexinrouteset, selectednodeindex);
+        nodeindexinrouteset = setdiff(nodeindexinrouteset, selectednodeindex, 'stable');
     end
     [removedrouteset, removednodeset] = removeNodeInRouteSet(D, initialrouteset);
     removednodeindexset = D;
@@ -354,22 +357,22 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
             selectednodepos = restnodeposset(1);  % 随便选取一个节点插入到新路径中
             alreadyinsertposset = [alreadyinsertposset, selectednodepos];
             selectednode = removednodeset(selectednodepos);  % selectednodepos对应的节点
-            newrouteindex = length(removedroute) + 1;  % 新路径对应的车辆编号
+            newrouteindex = length(removedrouteset) + 1;  % 新路径对应的车辆编号
             depot = removedrouteset(1).route(1);  % depot节点
             depot.carindex = newrouteindex;
             selectednode.carindex = newrouteindex;
-            newroute.route = [depot, selectednode, depot];
-            newroute.nodeindex = [selectednode.index];
+            newroutenode.route = [depot, selectednode, depot];
+            newroutenode.nodeindex = [selectednode.index];
             if selectednode.type == 'L'
-                newroute.quantityL = selectednode.quantity;
-                newroute.quantityB = 0;
+                newroutenode.quantityL = selectednode.quantity;
+                newroutenode.quantityB = 0;
             else
-                newroute.quantityB = selectednode.quantity;
-                newroute.quantityL = 0;
+                newroutenode.quantityB = selectednode.quantity;
+                newroutenode.quantityL = 0;
             end
-            newroute.index = newrouteindex;
-            removedrouteset = [removedrouteset newroute];
-            operationroutenode = newroute;   % 针对新改变的路径，重新计算剩余带插入节点到此路径的插入代价
+            newroutenode.index = newrouteindex;
+            removedrouteset = [removedrouteset newroutenode];
+            operationroutenode = newroutenode;   % 针对新改变的路径，重新计算剩余带插入节点到此路径的插入代价
             operationrouteindex = newrouteindex; % 改变的路径对应的货车编号
         else
             % 找到最小插入代价对应的节点在removednodeset中的位置，以及其所属货车
@@ -387,10 +390,9 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
             % 对被选中的路径，更新其信息
             nodeindexincurroute = removedrouteset(selectedrouteindex).nodeindex;  % 要插入的路径中其所拥有的节点编号（全局）
             temp = []; 
-            insertpointpos, length(nodeindexincurroute)
             temp = [temp, nodeindexincurroute(1:insertpointpos-1)];
             temp = [temp, selectednode.index];
-            temp = [temp, nodeindexincurroute(insertpointpos+1:end)];
+            temp = [temp, nodeindexincurroute(insertpointpos:end)];
             removedrouteset(selectedrouteindex).nodeindex = temp;
             selectedroute = removedrouteset(selectedrouteindex).route;  % 被选中的路径其拥有的节点
             temp = [];
@@ -433,16 +435,16 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
     alreadyinsertposset = [];
     m = length(removednodeset);
     mark = ones(1,m);
-    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
+    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
         % 先找到regret cost最大的节点在removednodeset中的位置，并且把该点的insertcost等信息无效化
         [infpos] = find(bestinsertcostarr == inf);  % 找出最佳插入代价为inf的节点位置
         infpos = setdiff(infpos, alreadyinsertposset, 'stable');   % 注意已经插入到路径中的节点，其最小插入代价也是无穷大
-        if length(infpos) ~= 0    % 也就是说，所有的节点都没有可行插入位置，则应该新建路径
+        if length(infpos) ~= 0    % 也就是说，有一些节点已经没有可行插入位置，则应该新建路径
             selectednodepos = infpos(1);
             insertpointpos = -1;
         else
-            costdiffarr = bestinsertcostarr - secondinsertcostarr;  % 存放每个节点最好和最差插入代价之差
+            costdiffarr = abs(bestinsertcostarr - secondinsertcostarr);  % 存放每个节点最好和最差插入代价之差
             costdiffarr(alreadyinsertposset) = -inf;  % 已经插入的节点，其代价差赋为-∞，防止再次被选中
             [maxdiff, maxdiffindex] = max(costdiffarr);
             selectednodepos = maxdiffindex(1);  % 当前regret cost最大的点的下标（在removednode中位置）
