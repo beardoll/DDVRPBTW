@@ -1,7 +1,7 @@
 clc;clear;
-path = 'C:\Users\beardollPC\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_050';
+path = 'C:\Users\cfinsbear\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_050';
 load(path);
-[LHs, BHs, depot] = seperateCustomer(path, 0.3);
+[LHs, BHs, depot] = seperateCustomer(path, 0);
 [initial_path] = initial(LHs, BHs, depot, capacity);
 n = length(cx);
 distmat = zeros(n,n);

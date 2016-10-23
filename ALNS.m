@@ -7,6 +7,12 @@ function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitym
     removeweight = ones(1,removeheuristicnum); % 各个remove algorithm的权重
     insertweight = ones(1,insertheuristicnum); % 各个insert algorithm的权重
     noiseweight = ones(1,2); % 第一个元素是加噪声的权重，第二个元素是不加噪声的权重
+    removeusefrequency = zeros(1,removeheuristicnum); % 各个remove算子使用的次数
+    insertusefrequency = zeros(1,insertheuristicnum); % 各个insert算子使用的次数
+    removescore = zeros(1,removeheuristicnum);  % 各个remove算子在当前segment中的评分
+    insertscore = zeros(1,insertheuristicnum);  % 各个insert算子在当前segment中的评分
+    noiseaddscore = zeros(1,2);  % 第1个元素是加噪声的得分，第2个元素是不加噪声的得分 
+    noiseaddfrequency = 0;  % 噪声使用的次数
     maxiter = 10000;  % 总的迭代次数
     segment = 100;  % 每隔一个segment更新removeprob和insertprob
     curpath = initial_path;
@@ -33,13 +39,16 @@ function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitym
     for iter = 1:maxiter
         % 产生随机数选取remove算子和insert算子
         if mod(iter, segment) == 1  % 开始新的segment，应该要将加分相关的变量全部清零
-            fprintf('-----segment: %d, current cost: %f, current best cost: %f, hashtable length: %d\n', floor(iter/segment)+1, curcost, curglobalmincost, length(hashtable));
             if iter ~= 1  % 如果不是刚开始，则应该更新各算子的概率
                 for i = 1:removeheuristicnum
-                    removeweight(i) = removeweight(i) * (1-r) + r * removescore(i)/removeusefrequency(i);
+                    if removeusefrequency(i) ~= 0
+                        removeweight(i) = removeweight(i) * (1-r) + r * removescore(i)/removeusefrequency(i);
+                    end
                 end
                 for j = 1:insertheuristicnum
-                    insertweight(j) = insertweight(j) * (1-r) + r * insertprob(j)/insertusefrequency(j);
+                    if insertusefrequency(j) ~= 0
+                        insertweight(j) = insertweight(j) * (1-r) + r * insertscore(j)/insertusefrequency(j);
+                    end
                 end
                 removeprob = removeweight / sum(removeweight); % 归一化
                 insertprob = insertweight / sum(insertweight);
@@ -47,6 +56,16 @@ function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitym
                 noiseweight(2) = noiseweight(2) * (1-r) + r * noiseaddscore(2) / (segment - noiseaddfrequency);
                 noiseprobability = noiseweight(1) / sum(noiseweight);
             end
+            fprintf('-----segment: %d, current cost: %f, current best cost: %f, hashtable length: %d\n', floor(iter/segment)+1, curcost, curglobalmincost, length(hashtable));
+            fprintf('     shaw removal score: %d, random removal score: %d, worst removal score: %d\n', removescore(1), removescore(2), removescore(3));
+            fprintf('     shaw removal weight: %f, random removal weight: %f, worst removal weight: %f\n', removeweight(1), removeweight(2), removeweight(3));
+            fprintf('     shaw removal freq: %d, random removal freq: %d, worst removal freq: %d\n', removeusefrequency(1), removeusefrequency(2), removeusefrequency(3));
+            fprintf('     greedy insert score: %d, regret insert score: %d\n', insertscore(1), insertscore(2));
+            fprintf('     greedy insert weight: %f, regret insert weight: %f\n', insertweight(1), insertweight(2));
+            fprintf('     greedy insert freq: %d, regret insert freq: %d\n', insertusefrequency(1), insertusefrequency(2));
+            fprintf('     noise score: %d, without noise score: %d\n', noiseaddscore(1), noiseaddscore(2));
+            fprintf('     noise weight: %f, without noise weight: %f\n', noiseweight(1), noiseweight(2));
+            fprintf('     noise use freq: %d\n', noiseaddfrequency);
             removescore = zeros(1,removeheuristicnum);  % 各个remove算子在当前segment中的评分
             insertscore = zeros(1,insertheuristicnum);  % 各个insert算子在当前segment中的评分
             removeusefrequency = zeros(1,removeheuristicnum); % 各个remove算子使用的次数
@@ -68,8 +87,6 @@ function [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitym
         end
         removeusefrequency(removeindex) = removeusefrequency(removeindex) + 1;
         insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;
-        removeindex = 3;
-        insertindex = 1;
         switch removeindex
             case 1
                 tmax = countMaxValue(curpath);
@@ -188,7 +205,6 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
             selectednode = selectedroute(selectednodeindex + 1); % 注意第一个节点是仓库
         end
     end
-    length(selectedcarset)
     R = inf(n,n);  % 衡量节点之间的相近程度
     temp = [];
     for i = 1:K  % 先把所有节点的放到一个临时向量temp中
@@ -222,8 +238,8 @@ function [removedpath, removedrequestnode, removedrequestindex] = shawRemoval(so
         removenodeindex = nodeindexinroute(sortRindex(1:removenum)); % 被移除的路径节点的编号
         nodeindexinroute = setdiff(nodeindexinroute, removenodeindex, 'stable');
         D = [D, removenodeindex];
-        randompos = randi([1 length(nodeindexinroute)]);
-        selectednodenum = nodeindexinroute(randompos);  % 再次随机选取一个request
+        randompos = randi([1 length(D)]);
+        selectednodenum = D(randompos);  % 再次随机选取一个request，已经移除的路径集合中
     end
     % 现在对D中的编号进行映射，移除掉各条路径中的D中的元素
     [solutions, DD] = removeNodeInRoute(D, solutions);
