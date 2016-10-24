@@ -349,7 +349,8 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
     alreadyinsertposset = [];  % 已经插入的节点在removednodeset中的位置
     m = length(removednodeset);
     mark = ones(1,m);
-    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
+    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] =...
+        computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
         mincost = min(bestinsertcostarr);
         if mincost == inf   % 所有剩余的待插入点都没有可行地方插入
@@ -407,21 +408,38 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
                     removedrouteset(selectedrouteindex).quantityB = removedrouteset(selectedrouteindex).quantityB + selectednode.quantity;
             end
             operationroutenode = removedrouteset(selectedrouteindex);  % 针对新改变的路径，重新计算剩余带插入节点到此路径的插入代价
-            operationrouteindex = selectedrouteindex; % 改变的路径对应的货车编号
+            operationrouteindex = selectedrouteindex; % 改变的路径对应的货车编号          
         end
         
-        % 插入了新的节点后，对插入的路径代价进行重新估算
-        % 只需要更新路径信息有变化的那一列数据就可以
+        % 插入了新的节点后，对剩余未插入节点在该路径的代价进行重新估算
+        % 基本假设：对于某一条路径L，插入新节点后，其余节点到该路径的插入代价不会变小
+        % 对于某个节点N，则需要作出如下处理：
+        %  (a) if N原来的最佳插入路径为L      => oldbest = newbest
+        %        if N原来的次佳插入路径为L    => oldsecond =  newsecond
+        %        if N原来的次佳插入路径不为L  =>
+        %             newsecond < oldsecond?  -> yes => oldsecond = newsecond
+        %                                     -> no  => newsecond stay unchanged
+        %  (b) if N原来的最佳插入路径不为L  =>
+        %        if newbest < oldbest    => oldbest = newbest
+        %            if N原来的次佳插入路径为L  => oldsecond = newsecond                 
+        %            if N原来的次佳插入路径不为L =>
+        %                newsecond < oldsecond?  -> yes => oldsecond = newsecond
+        %                                        -> no  => oldsecond stay unchanged
+        %        if newbest > oldbest =>  oldbest stay unchanged
+        %            if newbest < oldsecond? -> yes  => oldsecond = newbest
+        %                                    -> no   => oldsecond stay unchanged
+        % 若在该路径上得到的插入代价比过去的最佳插入代价更小，则更新相应节点的最佳插入代价及位置
         mark = ones(1,m);  % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsertposset) = 0;  % 已经插入过的节点置为0
-        [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr] = computeInsertCostMap(removednodeset, operationroutenode, capacity, mark, noiseadd, noiseamount);
-        for ss = 1:m
-            if mark(ss) == 1
-                if newbestinsertcostarr(ss) < bestinsertcostarr(ss)  % 找到更好的解，则更新
-                    bestinsertcostarr(ss) = newbestinsertcostarr(ss);
-                    bestinsertinfoarr(ss,1) = operationrouteindex;
-                    bestinsertinfoarr(ss,2) = newbestinsertinfoarr(ss,2);
-                end
+        [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr, newsecondinsertinfoarr] =...
+            computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
+        restremovednodepos = setdiff(1:m, alreadyinsertposset, 'stable');  % 剩余没有插入的节点位置
+        for ww = 1:length(restremovednodepos)
+            curnodepos = restremovednodepos(ww);
+            if newbestinsertcostarr(curnodepos) < bestinsertcostarr(curnodepos)  % 找到更好的解，则更新
+                bestinsertcostarr(curnodepos) = newbestinsertcostarr(curnodepos);
+                bestinsertinfoarr(curnodepos,1) = operationrouteindex;
+                bestinsertinfoarr(curnodepos,2) = newbestinsertinfoarr(curnodepos,2);
             end
         end
     end
@@ -528,7 +546,7 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
 end
 
 %% 附加函数
-function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
+function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
     % 计算removednodeset中节点插入到removedrouteset中的最小插入代价和次小插入代价
     % bestinsertcostmap: 各个节点在各条路径中的最小插入代价，secondxxx为次小
     % bestinsertinfomap: 各个节点在各条路径的最小插入点信息，secondxxx为次小
@@ -538,13 +556,16 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeIn
     bestinsertcostarr = inf(m,1);          % 各个待插入节点的最佳插入代价(对于已插入的节点，赋为无穷大)
     bestinsertinfoarr = -1 * ones(m,2);   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
     secondinsertcostarr = inf(m,1);        % 各个待插入节点的次佳插入代价(对于已插入的节点，赋为无穷大)
+    secondinsertinfoarr = -1 * ones(m,2);   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
     for i = 1:m
         if mark(i) == 1  % 只考虑尚未插入到路径中的节点
             curnode = removednodeset(i);  % 当前需要计算的节点
             mininsertcost = inf;
-            mininsertpointpos = -1;  % 最小代价插入点位置（插入到此点后方）
-            mininsertrouteindex = -1;  % 要插入的路径编号
+            mininsertpointpos = -1;     % 最小代价插入点位置（插入到此点后方）
+            mininsertrouteindex = -1;   % 最小代价插入的路径编号
             secondinsertcost = inf;
+            secondinsertpointpos = -1;      % 次小代价插入点位置（插入到此点后方）
+            secondinsertrouteindex = -1;   % 次小代价插入的路径编号
             for j = 1:K
                 curroutenode = removedrouteset(j);
                 curroute = curroutenode.route;
@@ -564,7 +585,9 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeIn
                                             temp = max(temp + noise,0);
                                         end
                                         if temp < mininsertcost
-                                            secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”                                         
+                                            secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”  
+                                            secondinsertpointpos = mininsertpointpos;      % 次小代价插入点位置（插入到此点后方）
+                                            secondinsertrouteindex = mininsertrouteindex;   % 次小代价插入的路径编号
                                             mininsertcost = temp;           
                                             mininsertpointpos = k;    % 插入点
                                             mininsertrouteindex = j;  % 要插入的路径
@@ -584,7 +607,9 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeIn
                                             temp = max(temp + noise,0);
                                         end   
                                         if temp < mininsertcost
-                                            secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”                                         
+                                            secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”  
+                                            secondinsertpointpos = mininsertpointpos;      % 次小代价插入点位置（插入到此点后方）
+                                            secondinsertrouteindex = mininsertrouteindex;   % 次小代价插入的路径编号
                                             mininsertcost = temp;           
                                             mininsertpointpos = k;    % 插入点
                                             mininsertrouteindex = j;  % 要插入的路径
@@ -597,7 +622,8 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr] = computeIn
             end
             bestinsertcostarr(i) = mininsertcost;          
             bestinsertinfoarr(i,:) = [mininsertrouteindex, mininsertpointpos];   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
-            secondinsertcostarr(i) = secondinsertcost;        
+            secondinsertcostarr(i) = secondinsertcost;     
+            secondinsertinfoarr(i,:) = [secondinsertrouteindex, secondinsertpointpos]
         end
     end
 end
