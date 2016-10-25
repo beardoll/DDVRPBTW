@@ -100,7 +100,6 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
         switch removeindex
             case 1
                 tmax = countMaxValue(currouteset);
-                [currouteset] = updateArrivalTime(currouteset);
                 [removedrouteset, removednodeset, removednodeindexset] = shawRemoval(currouteset, q, p, n, dmax, tmax, quantitymax);
             case 2
                 [removedrouteset, removednodeset, removednodeindexset] = randomRemoval(currouteset, q, n);
@@ -177,7 +176,7 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
             end
         end
         
-        % 更新hash表以及curcost, currouteset
+        % 更新hash表以及curcost, curpath
         if accept == 1  % 如果被接受了，先判断当前解是否在hashtable中，若无，则添加到hashtable中
             if ismember(newroutehashkey, hashtable) == 0  % 该路径还没有被接受过
                 hashtable{length(hashtable)+1} = newroutehashkey;
@@ -793,7 +792,7 @@ function [finalrouteset] = updateArrivalTime(initialrouteset)
         curroute = initialrouteset(i).route;
         currenttime = 0;
         for j = 2:length(curroute)-1  % 首尾都是仓库
-            predecessor = curroute(j-1);
+            predeccessor = curroute(j-1);
             successor = curroute(j);
             currenttime = currenttime + sqrt((predecessor.cx-successor.cx)^2 + (predecessor.cy-successor.cy)^2);
             curroute(j).arrival_time = currenttime;
@@ -802,9 +801,7 @@ function [finalrouteset] = updateArrivalTime(initialrouteset)
             end
             currenttime = currenttime + successor.service_time;
         end
-        initialrouteset(i).route = curroute;
     end
-    finalrouteset = initialrouteset;
 end
 
 %% ------------------ 调试的时候用到的函数 ------------------- %%
