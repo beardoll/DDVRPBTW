@@ -28,7 +28,7 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
     r = 0.1;
     
     % 其余核心参数
-    maxiter = 10000;  % 总的迭代次数
+    maxiter = 25000;  % 总的迭代次数
     segment = 100;  % 每隔一个segment更新removeprob和insertprob
     w = 0.05;
     T = w * curcost / log(2);  % 初始温度
@@ -51,17 +51,31 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
                 for i = 1:removeheuristicnum
                     if removeusefrequency(i) ~= 0
                         removeweight(i) = removeweight(i) * (1-r) + r * removescore(i)/removeusefrequency(i);
+                    else  % 如果没有被使用过，权重应该下降
+                        removeweight(i) = removeweight(i) * (1-r);
                     end
                 end
                 for j = 1:insertheuristicnum
                     if insertusefrequency(j) ~= 0
                         insertweight(j) = insertweight(j) * (1-r) + r * insertscore(j)/insertusefrequency(j);
+                    else  % 如果没有被使用过，权重应该下降
+                        insertweight(j) = insertweight(j) * (1-r);
                     end
                 end
                 removeprob = removeweight / sum(removeweight); % 归一化
                 insertprob = insertweight / sum(insertweight);
-                noiseweight(1) = noiseweight(1) * (1-r) + r * noiseaddscore(1) / noiseaddfrequency;
-                noiseweight(2) = noiseweight(2) * (1-r) + r * noiseaddscore(2) / (segment - noiseaddfrequency);
+                if noiseaddfrequency == 0  % 上一个segment中没有加过噪声
+                    noiseweight(1) = noiseweight(1) * (1-r);
+                    noiseweight(2) = noiseweight(2) * (1-r) + r * noiseaddscore(2) / segment;
+                else
+                    if noiseaddfrequency == segment  % 上一个segment中每次都加了噪声
+                        noiseweight(1) = noiseweight(1) * (1-r) + r * noiseaddscore(1) / segment;
+                        noiseweight(2) = noiseweight(2) * (1-r);
+                    else  % 上一个segment中，有的时候加了噪声，有的时候没有加噪声
+                        noiseweight(1) = noiseweight(1) * (1-r) + r * noiseaddscore(1) / noiseaddfrequency;
+                        noiseweight(2) = noiseweight(2) * (1-r) + r * noiseaddscore(2) / (segment - noiseaddfrequency);
+                    end
+                end
                 noiseprobability = noiseweight(1) / sum(noiseweight);
             end
             fprintf('-----segment: %d, current cost: %f, current best cost: %f, hashtable length: %d\n', floor(iter/segment)+1, curcost, curglobalmincost, length(hashtable));
@@ -99,8 +113,8 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
         insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;  % 使用到的insert算子其使用次数加一
         switch removeindex
             case 1
-                tmax = countMaxValue(currouteset);
                 [currouteset] = updateArrivalTime(currouteset);
+                tmax = countMaxValue(currouteset);
                 [removedrouteset, removednodeset, removednodeindexset] = shawRemoval(currouteset, q, p, n, dmax, tmax, quantitymax);
             case 2
                 [removedrouteset, removednodeset, removednodeindexset] = randomRemoval(currouteset, q, n);
@@ -185,7 +199,6 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
             curcost = newcost;  % 更新当前的cost
             currouteset = finalrouteset;  % 更新当前的path
         end  
-        save('C:\Users\cfinsbear\Documents\DDVRPBTW\tempfinalrouteset', 'globalbestrouteset');
     end
     final_path = globalbestrouteset;
     final_cost = curglobalmincost;
@@ -348,10 +361,10 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
     alreadyinsertposset = [];  % 已经插入的节点在removednodeset中的位置
     m = length(removednodeset);
     mark = ones(1,m);
-    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] =...
+    [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] =...
         computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
-        mincost = min(bestinsertcostarr);
+        mincost = min(min(bestinsertcostmap));
         
         % 所有剩余的待插入点都没有可行地方插入，则应该开辟一条新的路径
         if mincost == inf   
@@ -380,19 +393,23 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
         else  % 有可行插入点，直接插入到相应的路径中 
             
             % 找到最小插入代价对应的节点在removednodeset中的位置，以及其所属货车
-            selectednodepos = find(bestinsertcostarr == mincost);
-            selectednodepos = selectednodepos(1);  
-            selectedrouteindex = bestinsertinfoarr(selectednodepos, 1);  
-            insertpointpos = bestinsertinfoarr(selectednodepos, 2);        % 最佳插入点位置
+            index = find(bestinsertcostmap == mincost);
+            index = index(1);
+            selectedrouteindex = floor(index/m) + 1;
+            selectednodepos = index - (selectedrouteindex-1) * m;
+            if selectednodepos == 0
+                selectednodepos = m;
+                selectedrouteindex = selectedrouteindex - 1;
+            end
+            insertpointpos = bestinsertinfomap(selectednodepos, selectedrouteindex);        % 最佳插入点位置
             alreadyinsertposset = [alreadyinsertposset, selectednodepos];   % 更新已插入到路径中的节点
             selectednode = removednodeset(selectednodepos);   % 此次被选中的节点
             selectednode.carindex = selectedrouteindex;       % 所属货车
             
             % 对于新插入的节点，使得其插入信息无效化，避免下次又被选中
-            bestinsertcostarr(selectednodepos) = inf;  
-            bestinsertinfoarr(selectednodepos,:) = [-1 -1];  
-            secondinsertcostarr(selectednodepos) = inf;  
-            secondinsertinfoarr(selectednodepos,:) = [-1 -1];
+            bestinsertcostmap(selectednodepos,:) = inf;  
+            bestinsertinfomap(selectednodepos,:) = -1;  
+            secondinsertcostmap(selectednodepos,:) = inf;  
             
             % 对被选中的路径，更新其信息
             nodeindexincurroute = removedrouteset(selectedrouteindex).nodeindex;  % 要插入的路径中其所拥有的节点编号（全局）
@@ -420,19 +437,11 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
         % 对当前插入节点的路径，求所有未插入节点到该路径的最小/次小插入代价信息，并按需更新原有的最小/次小插入代价信息
         mark = ones(1,m);  % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsertposset) = 0;  % 已经插入过的节点置为0
-        [newbestinsertcost, newbestinsertinfo, newsecondinsertcost, newsecondinsertinfo] = ...
+        [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr] =...
             computeInsertCostMap(removednodeset, operationroutenode, capacity, mark, noiseadd, noiseamount);
-        olddata.bestinsertinfoarr = bestinsertinfoarr;
-        olddata.bestinsertcostarr = bestinsertcostarr;
-        olddata.secondinsertinfoarr = secondinsertinfoarr;
-        olddata.secondinsertcostarr = secondinsertcostarr;
-        newdata.newbestinsertinfo = newbestinsertinfo;
-        newdata.newbestinsertcost = newbestinsertcost;
-        newdata.newsecondinsertinfo = newsecondinsertinfo;
-        newdata.newsecondinsertcost = newsecondinsertcost;
-        restremovednodepos = setdiff(1:m, alreadyinsertposset, 'stable');
-        [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] =...
-            updateInsertCostMap(restremovednodepos, olddata, newdata, operationrouteindex);
+        bestinsertcostmap(:,operationrouteindex) = newbestinsertcostarr;
+        bestinsertinfomap(:,operationrouteindex) = newbestinsertinfoarr;
+        secondinsertcostmap(:,operationrouteindex) = newsecondinsertcostarr;
     end
     finalrouteset = removedrouteset;  
 end
@@ -444,11 +453,21 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
     alreadyinsertposset = [];
     m = length(removednodeset);
     mark = ones(1,m);
-    [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
+    [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] =...
+        computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
         
-        % 先找到regret cost最大的节点在removednodeset中的位置，并且把该点的insertcost等信息无效化
-        [infpos] = find(bestinsertcostarr == inf);  % 找出最佳插入代价为inf的节点位置
+        % 先求出各个待插入节点的最小和次小代价
+        % 次小代价可能是最小代价map中的次小代价，也可能是次小代价map中的最小代价，都要求出来
+        tempbestmap = bestinsertcostmap'; % 按行求最小
+        [bestcostarr, bestcostindex] = min(tempbestmap);
+        tempbestmap(bestcostindex) = inf;       % 继续求次小(bestmap的次小)
+        secondcostarr1 = min(tempbestmap);
+        tempsecondmap = secondinsertcostmap';   % 求另一次小(secondmap中的最小)
+        secondcostarr2 = min(tempsecondmap);
+        
+        % 先看一下未插入节点中，是否有最佳插入代价为inf的，如果有，应该优先处理
+        [infpos] = find(bestcostarr == inf);  % 找出最佳插入代价为inf的节点位置
         infpos = setdiff(infpos, alreadyinsertposset, 'stable');   % 注意已经插入到路径中的节点，其最小插入代价也是无穷大
         if length(infpos) ~= 0       % 也就是说，有一些节点已经没有可行插入位置，则应该优先为这些节点作安排，并新建路径
             selectednodepos = infpos(1);     % 随便选一个节点新建路径
@@ -456,18 +475,18 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
         else
             
             % 所有的未插入节点都有可行插入位置，那么选取regret cost最大者进行插入 
-            costdiffarr = abs(bestinsertcostarr - secondinsertcostarr);    % 存放每个节点最好和最差插入代价之差
+            costdiffarr = max(abs(bestcostarr-secondcostarr1), abs(bestcostarr-secondcostarr2));    % 存放每个节点最好和最差插入代价之差
             costdiffarr(alreadyinsertposset) = -inf;       % 已经插入的节点，其代价差赋为-∞，防止再次被选中
             [maxdiff, maxdiffindex] = max(costdiffarr);
             selectednodepos = maxdiffindex(1);     % 当前regret cost最大的点的下标（在removednode中位置）
-            insertpointpos = bestinsertinfoarr(selectednodepos, 2);       % 找出当前节点的最佳插入位置
-            selectedrouteindex = bestinsertinfoarr(selectednodepos, 1);   % 最佳插入点，也就是货车编号
+            [bestcost, bestcostindex] = min(bestinsertcostmap(selectednodepos, :));        % 选中节点的最小插入代价路径
+            selectedrouteindex = bestcostindex(1);     % 选中的路径
+            insertpointpos = bestinsertinfomap(selectednodepos, selectedrouteindex);       % 找出当前节点的最佳插入位置
             
             % 对于新插入的节点，使得其插入信息无效化，避免下次又被选中
-            bestinsertcostarr(selectednodepos) = inf;  
-            secondinsertcostarr(selectednodepos) = inf;
-            bestinsertinfoarr(selectednodepos,:) = [-1 -1];
-            secondinsertinfoarr(selectednodepos,:) = [-1 -1];
+            bestinsertcostmap(selectednodepos,:) = inf;  
+            secondinsertcostmap(selectednodepos,:) = inf;
+            bestinsertinfomap(selectednodepos,:) = -1;
         end
         alreadyinsertposset = [alreadyinsertposset, selectednodepos];  % 存放的是相对于removednode的下标
         selectednode = removednodeset(selectednodepos); % 此次被选中的节点
@@ -518,47 +537,35 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
         % 对当前插入节点的路径，求所有未插入节点到该路径的最小/次小插入代价信息，并按需更新原有的最小/次小插入代价信息
         mark = ones(1,m);                 % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsertposset) = 0;    % 已经插入过的节点置为0
-        [newbestinsertcost, newbestinsertinfo, newsecondinsertcost, newsecondinsertinfo] = ...
+        [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr] =...
             computeInsertCostMap(removednodeset, operationroutenode, capacity, mark, noiseadd, noiseamount);
-        olddata.bestinsertinfoarr = bestinsertinfoarr;
-        olddata.bestinsertcostarr = bestinsertcostarr;
-        olddata.secondinsertinfoarr = secondinsertinfoarr;
-        olddata.secondinsertcostarr = secondinsertcostarr;
-        newdata.newbestinsertinfo = newbestinsertinfo;
-        newdata.newbestinsertcost = newbestinsertcost;
-        newdata.newsecondinsertinfo = newsecondinsertinfo;
-        newdata.newsecondinsertcost = newsecondinsertcost;
-        restremovednodepos = setdiff(1:m, alreadyinsertposset, 'stable');
-        [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] =...
-            updateInsertCostMap(restremovednodepos, olddata, newdata, operationrouteindex);                 
+        bestinsertcostmap(:,operationrouteindex) = newbestinsertcostarr;
+        bestinsertinfomap(:,operationrouteindex) = newbestinsertinfoarr;
+        secondinsertcostmap(:,operationrouteindex) = newsecondinsertcostarr;
     end
     completerouteset = removedrouteset;
 end
 
 %% 附加函数
-function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
-    % 计算removednodeset中节点插入到removedrouteset中的最小插入代价和次小插入代价
+function [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
+    % 计算removednodeset中节点插入到removedrouteset中的每条路径的最小和次小插入代价
     % bestinsertcostmap: 各个节点在各条路径中的最小插入代价，secondxxx为次小
     % bestinsertinfomap: 各个节点在各条路径的最小插入点信息，secondxxx为次小
     % 对于mark(i) = 0的节点i，表示其已经插入到了路径中，那么其最小插入代价和次小插入代价都为无穷大
     K = length(removedrouteset);  % 车辆数目
     m = length(removednodeset);   % 所有待插入点的数目（里面有一些节点可能已经插入，以mark为标记）
-    bestinsertcostarr = inf(m,1);          % 各个待插入节点的最佳插入代价(对于已插入的节点，赋为无穷大)
-    bestinsertinfoarr = -1 * ones(m,2);   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
-    secondinsertcostarr = inf(m,1);        % 各个待插入节点的次佳插入代价(对于已插入的节点，赋为无穷大)
-    secondinsertinfoarr = -1 * ones(m,2);   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
+    bestinsertcostmap = inf(m,K);          % 各个待插入节点的最佳插入代价(对于已插入的节点，赋为无穷大)
+    bestinsertinfomap = -1*ones(m,K);      % 每一列代表货车编号，而数值表示插入点位置
+    secondinsertcostmap = inf(m,K);        % 各个待插入节点的次佳插入代价(对于已插入的节点，赋为无穷大)
     for i = 1:m
         if mark(i) == 1  % 只考虑尚未插入到路径中的节点
             curnode = removednodeset(i);  % 当前需要计算的节点
-            mininsertcost = inf;
-            mininsertpointpos = -1;     % 最小代价插入点位置（插入到此点后方）
-            mininsertrouteindex = -1;   % 最小代价插入的路径编号
-            secondinsertcost = inf;
-            secondinsertpointpos = -1;      % 次小代价插入点位置（插入到此点后方）
-            secondinsertrouteindex = -1;   % 次小代价插入的路径编号
             for j = 1:K
                 curroutenode = removedrouteset(j);
                 curroute = curroutenode.route;
+                mininsertcost = inf;
+                mininsertpointpos = -1;     % 最小代价插入点位置（插入到此点后方）
+                secondinsertcost = inf;
                 for k = 1:length(curroute) - 1
                     insertnode = curroute(k);  % 插入点，插入到此点后方
                     successor = curroute(k+1);
@@ -574,13 +581,10 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                             noise = -noiseamount + 2*noiseamount*rand;
                                             temp = max(temp + noise,0);
                                         end
-                                        if temp < mininsertcost
+                                        if temp <= mininsertcost
                                             secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”  
-                                            secondinsertpointpos = mininsertpointpos;      % 次小代价插入点位置（插入到此点后方）
-                                            secondinsertrouteindex = mininsertrouteindex;   % 次小代价插入的路径编号
                                             mininsertcost = temp;           
                                             mininsertpointpos = k;    % 插入点
-                                            mininsertrouteindex = j;  % 要插入的路径
                                         end
                                     end
                                 end
@@ -596,24 +600,20 @@ function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinser
                                             noise = -noiseamount + 2*noiseamount*rand;
                                             temp = max(temp + noise,0);
                                         end   
-                                        if temp < mininsertcost
+                                        if temp <= mininsertcost
                                             secondinsertcost = mininsertcost;  % 原来“最好的”变成了“次好的”  
-                                            secondinsertpointpos = mininsertpointpos;      % 次小代价插入点位置（插入到此点后方）
-                                            secondinsertrouteindex = mininsertrouteindex;   % 次小代价插入的路径编号
                                             mininsertcost = temp;           
                                             mininsertpointpos = k;    % 插入点
-                                            mininsertrouteindex = j;  % 要插入的路径
                                         end
                                     end
                                 end
                             end
                     end                
                 end
-            end
-            bestinsertcostarr(i) = mininsertcost;          
-            bestinsertinfoarr(i,:) = [mininsertrouteindex, mininsertpointpos];   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
-            secondinsertcostarr(i) = secondinsertcost;     
-            secondinsertinfoarr(i,:) = [secondinsertrouteindex, secondinsertpointpos];
+                bestinsertcostmap(i,j) = mininsertcost;          
+                bestinsertinfomap(i,j) = mininsertpointpos;   % 第一行是最佳插入代价对应的路径编号，第二行是插入点编号
+                secondinsertcostmap(i,j) = secondinsertcost; 
+            end        
         end
     end
 end
@@ -647,72 +647,6 @@ function [mark] = timeWindowJudge(insertpointpos, route, newcustomer)
                     time = successor.start_time;
                 end
                 time = time + successor.service_time;
-            end
-        end
-    end
-end
-
-function [bestinsertcostarr, bestinsertinfoarr, secondinsertcostarr, secondinsertinfoarr] = updateInsertCostMap(restremovednodepos, olddata, newdata, operationrouteindex)
-    % 将未插入节点的bestinsert和secondinsert信息给更新
-    % 插入了新的节点后，对剩余未插入节点在该路径(路径L)的代价进行重新估算
-    % 基本假设：对于某一条路径L，插入新节点后，其余节点到该路径的插入代价不会变小
-    % 对于某个节点N，则需要作出如下处理：
-    %  (a) if N原来的最佳插入路径为L(oldbest失效)     => oldbest = newbest
-    %        if N原来的次佳插入路径为L(oldsecond失效) => oldsecond =  newsecond
-    %        if N原来的次佳插入路径不为L  =>
-    %             newsecond < oldsecond?  -> yes => oldsecond = newsecond
-    %                                     ->  no => oldsecond stay unchanged
-    %  (b) if N原来的最佳插入路径不为L  =>
-    %        if newbest < oldbest(oldsecond无竞争力)    => oldbest = newbest
-    %             newsecond < oldbest? -> yes => oldsecond = newsecond
-    %                                      no => oldsecond = oldbest                 
-    %        if newbest > oldbest(newsecond无竞争力) =>  oldbest stay unchanged
-    %            if newbest < oldsecond? -> yes => oldsecond = newbest
-    %                                    ->  no => oldsecond stay unchanged
-    bestinsertinfoarr = olddata.bestinsertinfoarr;
-    bestinsertcostarr = olddata.bestinsertcostarr;
-    secondinsertinfoarr = olddata.secondinsertinfoarr;
-    secondinsertcostarr = olddata.secondinsertcostarr;
-    newbestinsertinfo = newdata.newbestinsertinfo;
-    newbestinsertcost = newdata.newbestinsertcost;
-    newsecondinsertinfo = newdata.newsecondinsertinfo;
-    newsecondinsertcost = newdata.newsecondinsertcost;
-    for ww = 1:length(restremovednodepos)
-        curnodepos = restremovednodepos(ww);  % 当前节点的位置
-        if bestinsertinfoarr(curnodepos, 1) == operationrouteindex
-            bestinsertinfoarr(curnodepos,2) = newbestinsertinfo(curnodepos, 2);
-            bestinsertinfoarr(curnodepos,1) = operationrouteindex;
-            bestinsertcostarr(curnodepos) = newbestinsertcost(curnodepos);
-            if secondinsertinfoarr(curnodepos, 1) == operationrouteindex
-                secondinsertinfoarr(curnodepos,2) = newsecondinsertinfo(curnodepos,2);
-                secondinsertinfoarr(curnodepos,1) = operationrouteindex;
-                secondinsertcostarr(curnodepos) = newsecondinsertcost(curnodepos);
-            else
-                if newsecondinsertcost(curnodepos) < secondinsertcostarr(curnodepos)
-                    secondinsertinfoarr(curnodepos,2) = newsecondinsertinfo(curnodepos, 2);
-                    secondinsertinfoarr(curnodepos,1) = operationrouteindex;
-                    secondinsertcostarr(curnodepos) = newsecondinsertcost(curnodepos);
-                end
-            end
-        else
-            if newbestinsertcost(curnodepos) < bestinsertcostarr(curnodepos)
-                bestinsertinfoarr(curnodepos,2) = newbestinsertinfo(curnodepos, 2);
-                bestinsertinfoarr(curnodepos,1) = operationrouteindex;
-                bestinsertcostarr(curnodepos) = newbestinsertcost(curnodepos);
-                if newsecondinsertcost < secondinsertcostarr(curnodepos)
-                    secondinsertinfoarr(curnodepos,2) = newsecondinsertinfo(curnodepos, 2);
-                    secondinsertinfoarr(curnodepos, 1) = operationrouteindex;
-                    secondinsertcostarr(curnodepos) = newsecondinsertcost(curnodepos);
-                else
-                    secondinsertcostarr(curnodepos) = bestinsertcostarr(curnodepos);
-                    secondinsertinfoarr(curnodepos, :) = bestinsertcostarr(curnodepos, :);
-                end
-            else
-                if newbestinsertcost(curnodepos) < secondinsertcostarr(curnodepos)
-                    secondinsertcostarr(curnodepos) = newbestinsertcost(curnodepos);
-                    secondinsertinfoarr(curnodepos, 2) = newbestinsertinfo(curnodepos, 2);    
-                    secondinsertinfoarr(curnodepos, 1) = operationrouteindex;
-                end
             end
         end
     end
@@ -763,11 +697,15 @@ function [result] = removeNullRoute(routeset)
     result = routeset;
 end
 
-function [tmax] = countMaxValue(routeset)
+function [difftmax] = countMaxValue(routeset)
     % 计算path中的最晚货车到达时间以及最长距离
     tmax = -inf;
+    tmin = inf;
     for i = 1:length(routeset)
         curroute = routeset(i).route;
+        if curroute(2).arrival_time < tmin
+            time = curroute(2).arrival_time;
+        end
         time = 0;
         if length(curroute) > 2   % 空路径不计算
             for j = 2:length(curroute) - 1
@@ -785,6 +723,7 @@ function [tmax] = countMaxValue(routeset)
             end
         end
     end
+    difftmax = tmax - tmin;
 end
 
 function [finalrouteset] = updateArrivalTime(initialrouteset)

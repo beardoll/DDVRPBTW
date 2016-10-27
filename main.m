@@ -1,10 +1,10 @@
 clc;clear;
-path = 'C:\Users\cfinsbear\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_050';
+path = 'C:\Users\cfinsbear\Documents\DDVRPBTW\Solomon-Benchmark\solomon-mat\RC101_100';
 load(path);
 [LHs, BHs, depot] = seperateCustomer(path, 0);
 [initial_path] = initial(LHs, BHs, depot, capacity);
 n = length(cx);
-distmat = zeros(n,n);
+distmat = inf(n,n);
 for i = 1:n
     for j = i+1:n
         distmat(i,j) = sqrt((cx(i)-cx(j))^2+(cy(i)-cy(j))^2);
@@ -12,7 +12,7 @@ for i = 1:n
     end
 end
 dmax = max(max(distmat));
-quantitymax = max(quantity);
+quantitymax = max(quantity) - min(quantity);
 [final_path, final_cost] = ALNS(initial_path, capacity, dmax, quantitymax, n)
 save('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_050.mat', 'final_path', 'final_cost', 'initial_path');
 

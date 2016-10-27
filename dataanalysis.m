@@ -1,20 +1,22 @@
 function [] = dataanalysis()
     % 用来做数据分析
-%     load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_050.mat');
-%     drawRoute(final_path);
-%     routecost(initial_path)
-%     routecost(final_path)
-%     [nodeindex1, nodeindex2] = showNodeindexInRouteSet(final_path)
-%     sort(nodeindex2, 'ascend')
-% [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(final_path(4).route)
-    load('tempfinalrouteset');
-    [temp1, temp2] = showNodeindexInRouteSet(globalbestrouteset);
-    sort(temp1);
-    sort(temp2);
-    routecost(globalbestrouteset);
-    for i = 1:length(globalbestrouteset)
-        [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(globalbestrouteset(i).route)
+    load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_050.mat');
+    drawRoute(final_path);
+    routecost(initial_path)
+    routecost(final_path)
+    [nodeindex1, nodeindex2] = showNodeindexInRouteSet(final_path)
+    sort(nodeindex2, 'ascend')
+    for i = 1:length(final_path)
+        [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(final_path(i).route)
     end
+%     load('tempfinalrouteset');
+%     [temp1, temp2] = showNodeindexInRouteSet(globalbestrouteset);
+%     sort(temp1);
+%     sort(temp2);
+%     routecost(globalbestrouteset);
+%     for i = 1:length(globalbestrouteset)
+%         [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(globalbestrouteset(i).route)
+%     end
 end
 
 function [cost] = routecost(path)
