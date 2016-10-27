@@ -37,7 +37,6 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
     eta = 0.025; % 噪声系数，乘以路径中节点间的最大距离
     noiseamount = eta * dmax;   % 噪声量
     c = 0.9998;  % 降温速度
-    q = floor(ksi * n);
     
     % hash表，用来存储每次被accept的路径的hash code
     initialroutecode = routecode(initialroueset);  % 把初始解编码，用来生成harsh key
@@ -111,6 +110,7 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
         end
         removeusefrequency(removeindex) = removeusefrequency(removeindex) + 1;  % 使用到的remove算子其使用次数加一
         insertusefrequency(insertindex) = insertusefrequency(insertindex) + 1;  % 使用到的insert算子其使用次数加一
+        q = randi([4 min(100, floor(ksi * n))]);  % 随机选取4 - min(100,ksi*n)个节点去remove
         switch removeindex
             case 1
                 [currouteset] = updateArrivalTime(currouteset);
