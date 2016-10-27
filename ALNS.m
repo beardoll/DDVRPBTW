@@ -32,7 +32,8 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
     segment = 100;  % 每隔一个segment更新removeprob和insertprob
     w = 0.05;
     T = w * curcost / log(2);  % 初始温度
-    p = 6;       % remove heuristic中为增加随机性而设立的参数
+    p = 6;       % shaw remove中为增加随机性而设立的参数
+    pworst = 3;  % worst removal
     ksi = 0.4;   % 每次remove的节点数占总节点数的比例
     eta = 0.025; % 噪声系数，乘以路径中节点间的最大距离
     noiseamount = eta * dmax;   % 噪声量
@@ -117,9 +118,9 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
                 tmax = countMaxValue(currouteset);
                 [removedrouteset, removednodeset, removednodeindexset] = shawRemoval(currouteset, q, p, n, dmax, tmax, quantitymax);
             case 2
-                [removedrouteset, removednodeset, removednodeindexset] = randomRemoval(currouteset, q, n);
+                [removedrouteset, removednodeset, removednodeindexset] = randomRemoval(currouteset, q, n);  % no parameter p
             case 3
-                [removedrouteset, removednodeset, removednodeindexset] = worstRemoval(currouteset, q, p, n);
+                [removedrouteset, removednodeset, removednodeindexset] = worstRemoval(currouteset, q, pworst, n);
         end
         switch insertindex
             case 1
