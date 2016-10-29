@@ -26,6 +26,7 @@ function [LHs, BHs, depot] = seperateCustomer(path, percentage)
         node.cx = cx(node.index);
         node.cy = cy(node.index);
         node.quantity = quantity(node.index);
+        node.carindex = 1;
         node.type = 'L';
         LHs = [LHs, node];
     end
@@ -38,6 +39,7 @@ function [LHs, BHs, depot] = seperateCustomer(path, percentage)
         node.cx = cx(node.index);
         node.cy = cy(node.index);
         node.quantity = quantity(node.index);
+        node.carindex = 1;
         node.type = 'B';
         BHs = [BHs, node];
     end

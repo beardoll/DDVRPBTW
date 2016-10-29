@@ -1,9 +1,18 @@
-function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantitymax, n)
+function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantitymax, n)
     % adaptive large neighbor search algorithm
+    initialrouteset = [];
+    depot.carindex = 1;
+    routenode.route = [depot, depot];
+    routenode.index = 1;
+    routenode.quantityL = 0;
+    routenode.quantityB = 0;
+    routenode.nodeindex = [];
+    initialrouteset = [initialrouteset, routenode];
+    [initialrouteset] = greedyInsert(nodeset, initialrouteset, capacity, 0, 0);
     
     % 入口参数及出口参数赋值
-    currouteset = initialroueset;
-    curcost = routecost(initialroueset);
+    currouteset = initialrouteset;
+    curcost = routecost(initialrouteset);
     curglobalmincost = curcost; % 当前全局最优解
     globalbestrouteset = currouteset; % 全局最优路线
     
@@ -40,7 +49,7 @@ function [final_path, final_cost] = ALNS(initialroueset, capacity, dmax, quantit
     c = 0.9998;  % 降温速度
     
     % hash表，用来存储每次被accept的路径的hash code
-    initialroutecode = routecode(initialroueset);  % 把初始解编码，用来生成harsh key
+    initialroutecode = routecode(initialrouteset);  % 把初始解编码，用来生成harsh key
     hashtable = {};
     hashtable{1} = hash(initialroutecode,'MD2');
     
