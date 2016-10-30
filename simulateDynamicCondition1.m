@@ -1,4 +1,4 @@
-function [] = simulateDynamicCondition1(initialrouteset, newcustomerset)
+function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset, newcustomerset)
     % newcustomerset: eachnode: index, proposal_time, cx, cy, quantity, type
     %                   itself: indexset -- 便于索引某个index对应的customer在哪里                   
     
@@ -16,9 +16,6 @@ function [] = simulateDynamicCondition1(initialrouteset, newcustomerset)
        end
        listelement = [servicestarttime, 'service', firstnode.index, firstnode.carindex];    % 服务顾客
        eventlist(length(eventlist)+1,:) = listelement;
-       serviceendtime = servicestarttime + firstnode.service_time;
-       listelement = [serviceendtime, 'departure', firstnode.index, firstnode.carindex];    % 车辆出发
-       eventlist(length(eventlist)+1,:) = listelement;
     end
     
     % 换个名字
@@ -35,29 +32,71 @@ function [] = simulateDynamicCondition1(initialrouteset, newcustomerset)
     eventlist = sortEventlist(eventlist);
     
     % 执行状态机
+	backtimetable = [];  % 各车辆返回仓库的时间表
     while isempty(eventlist) == 0  
         curevent = eventlist(1,:);
+		curtime = curevent(1);
         eventlist(1,:) = [];  % 删除掉该事件
         switch curevent(2)
-            case 'service'
+            case 'service'   % 在此处定义服务完成时间
                 routeindex = curevent(4);
                 finishedmark = routeinfolist(routeindex).finishedmark;
                 curfinishedpos = find(finishedmark == 0);  % 当前服务的节点在nodeindex中的位置
                 curfinishedpos = curfinishedpos(1);
+				onservicenode = routeinfolist(routeindex).route(curfinishedpos+1);  % 当前接受服务的节点
                 finishedmark(curfinishedpos) = 1;  % 标记该位置的节点已走过
+				departuretime = curtime + onservicenode.service_time;
+				listelement = [departuretime, 'departure', onservicenode.index, onservicenode.carindex];    % 车辆出发
+				eventlist(length(eventlist)+1,:) = listelement;
+				eventlist = sortEventlist(eventlist);
                 routeinfolist(routeindex).finishedmark = finishedmark;
             case 'newdemandarrive'
                 index = curevent(3);
                 customerpos = find(index == newcustomerset.indexset);
                 customernode = newcustomerset(customerpos);
                 [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos(customernode, routeinfolist);
+				if bestrouteindex == -1   % 如果没有可行路径，需要手动添加服务开始事件，因为这是新路径的第一个节点
+					newroutenode = newrouteinfolist(end);   % 新增加的路径
+					startnode = newroutenode.route(1);
+					nextnode = newroutenode.route(2);
+					servicestarttime = curtime + sqrt((startnode.cx - nextnode.cx)^2+(startnode.cy - nextnode.cy)^2);
+					if servicestarttime < nextnode.start_time
+						servicestarttime = nextnode.start_time;
+						listelement = [servicestarttime, 'service', nextnode.index, nextnode.carindex];    % 服务顾客
+						eventlist(length(eventlist)+1,:) = listelement;
+						eventlist = sortEventlist(eventlist);
+					end
+				end	
                 routeinfolist = newrouteinfolist;
             case 'departure'  % 这时候要确定该货车的下一个出发点
                 routeindex = curevent(4);
                 curroutenode = routeinfolist(routeindex);
-                nextnodepos = find()
+                nextnodepos = find(curroutenode.finishedmark == 0);
+				if isempty(nextnodepos) == 1  % 如果此路径的所有节点已经走完，则应该回到仓库
+					depot = curroutenode.route(end);
+					lastnode = curroutenode.route(end-1);
+					backtime = curtime + sqrt((lastnode.cx - depot.cx)^2 + (lastnode.cy - depot.cy)^2);
+					listelement = [backtime, 'back', lastnode.index, lastnode.carindex];    % 车辆返回仓库
+					eventlist(length(eventlist)+1,:) = listelement;
+					eventlist = sortEventlist(eventlist);
+				else
+					nextnodepos = nextnodepos(1);
+					curnode = curroutenode.route(nextnodepos);      % 当前节点
+					nextnode = curroutenode.route(nextnodepos+1);   % 下一个节点
+					servicestarttime = curtime + sqrt((curnode.cx - nextnode.cx)^2 + (curnode.cy - nextnode.cy)^2);
+					if servicestarttime < nextnode.start_time
+						servicestarttime = nextnode.start_time;
+					end
+					listelement = [servicestarttime, 'service', nextnode.index, nextnode.carindex];    % 车辆返回仓库
+					eventlist(length(eventlist)+1,:) = listelement;
+					eventlist = sortEventlist(eventlist);
+				end
+			case 'back'
+				backtimetable(length(backtimetable)+1,:) = [curevent(1), curevent(4)];
         end
-    end    
+    end  
+	finalrouteset = routeinfolist;
+	finalcost = routecost(finalrouteset)
 end
 
 function [neweventlist] = sortEventlist(initialeventlist)
@@ -185,6 +224,19 @@ function [mark] = timeWindowJudge(insertpointpos, route, newcustomer)
                 end
                 time = time + successor.service_time;
             end
+        end
+    end
+end
+
+function [cost] = routecost(routeset)
+    % 计算path的总路长
+    cost = 0;
+    for i = 1:length(routeset)
+        curroute = routeset(i).route;
+        for j = 1:length(curroute)-1
+            front = curroute(j);
+            back = curroute(j+1);
+            cost = cost + sqrt((front.cx-back.cx)^2+(front.cy-back.cy)^2);
         end
     end
 end

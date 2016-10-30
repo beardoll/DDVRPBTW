@@ -1,6 +1,6 @@
 function [] = dataanalysis()
     % 用来做数据分析
-    load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_050.mat');
+    load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_100.mat');
     drawRoute(final_path);
     routecost(initial_path)
     routecost(final_path)
