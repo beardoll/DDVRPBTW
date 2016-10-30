@@ -1,4 +1,4 @@
-function [dynamicnodeset, determinednodeset, codemat] = dynamicGeneration(nodeset, dynamicism, depot, adheadtime)
+function [dynamicnodeset, determinednodeset, codemat] = dynamicGeneration(nodeset, dynamicism, adheadtime)
 	% 产生动态到达的顾客集
 	% dynamicism: 动态到达的顾客数占总顾客数的比例
 	% aheadtime: 动态到达的顾客其必须较start_time提前aheadtime到达

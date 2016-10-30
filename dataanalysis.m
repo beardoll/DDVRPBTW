@@ -1,14 +1,14 @@
 function [] = dataanalysis()
     % 用来做数据分析
-    load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC101_100.mat');
-    drawRoute(final_path);
-    routecost(initial_path)
-    routecost(final_path)
-    [nodeindex1, nodeindex2] = showNodeindexInRouteSet(final_path)
-    sort(nodeindex2, 'ascend')
-    for i = 1:length(final_path)
-        [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(final_path(i).route)
-    end
+%     load('C:\Users\cfinsbear\Documents\DDVRPBTW\RC102_100.mat');
+%     drawRoute(final_path);
+%     routecost(initial_path)
+%     routecost(final_path)
+%     [nodeindex1, nodeindex2] = showNodeindexInRouteSet(final_path)
+%     sort(nodeindex2, 'ascend')
+%     for i = 1:length(final_path)
+%         [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(final_path(i).route)
+%     end
 %     load('tempfinalrouteset');
 %     [temp1, temp2] = showNodeindexInRouteSet(globalbestrouteset);
 %     sort(temp1);
@@ -17,6 +17,10 @@ function [] = dataanalysis()
 %     for i = 1:length(globalbestrouteset)
 %         [mark, timeslot, starttimearray, endtimearray] = timeWindowDetect(globalbestrouteset(i).route)
 %     end
+
+    load('C:\Users\cfinsbear\Documents\DDVRPBTW\removedrouteset2.mat');
+    [nodeindex1, nodeindex2] = showNodeindexInRouteSet(removedrouteset)
+    [nodeindex] = showNodeindexInNodeSet(removednodeset)
 end
 
 function [cost] = routecost(path)
@@ -43,5 +47,12 @@ function [nodeindex1, nodeindex2] = showNodeindexInRouteSet(routeset)
         for j = 2:length(routeset(i).route) - 1
             nodeindex2 = [nodeindex2, routeset(i).route(j).index];
         end
+    end
+end
+
+function [nodeindex] = showNodeindexInNodeSet(nodeset)
+    nodeindex = [];
+    for i = 1:length(nodeset)
+        nodeindex = [nodeindex, nodeset(i).index];
     end
 end

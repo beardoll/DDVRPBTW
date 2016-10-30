@@ -2,13 +2,16 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
     % adaptive large neighbor search algorithm
     initialrouteset = [];
     depot.carindex = 1;
-    routenode.route = [depot, depot];
+    tempnode = nodeset(1);
+    nodeset(1) = [];
+    routenode.route = [depot, tempnode, depot];
     routenode.index = 1;
-    routenode.quantityL = 0;
+    routenode.quantityL = tempnode.quantity;
     routenode.quantityB = 0;
-    routenode.nodeindex = [];
+    routenode.nodeindex = [tempnode.index];
     initialrouteset = [initialrouteset, routenode];
     [initialrouteset] = regretInsert(nodeset, initialrouteset, capacity, 0, 0);
+    [nodeindex1x, nodeindex2x] = showNodeindexInRouteSet(initialrouteset)
     
     % 入口参数及出口参数赋值
     currouteset = initialrouteset;
@@ -131,7 +134,13 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
             case 3
                 [removedrouteset, removednodeset, removednodeindexset] = worstRemoval(currouteset, q, pworst, n);
         end
+%         [nodeindex1a, nodeindex2a] = showNodeindexInRouteSet(removedrouteset)
+%         [nodeindexa] = showNodeindexInNodeSet(removednodeset)
+%         length(removedrouteset)
         [removedrouteset] = removeNullRoute(removedrouteset, depot);
+%         [nodeindex1b, nodeindex2b] = showNodeindexInRouteSet(removedrouteset)
+%         [nodeindexb] = showNodeindexInNodeSet(removednodeset)
+%         length(removedrouteset)
         switch insertindex
             case 1
                 if noiseprobability > rand     % 以概率选择是否添加噪声影响
@@ -483,16 +492,14 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
         % 次小代价可能是最小代价map中的次小代价，也可能是次小代价map中的最小代价，都要求出来
         if size(bestinsertcostmap,2) == 1  % 只有一条路径，则不会有bestmap的次小
             bestcostarr = bestinsertcostmap;
-            secondcostarr1 = bestcostarr;
-            secondcostarr2 = secondinsertcostmap;
         else
             tempbestmap = bestinsertcostmap'; % 按行求最小
             [bestcostarr, bestcostindex] = min(tempbestmap);
             tempbestmap(bestcostindex) = inf;       % 继续求次小(bestmap的次小，非最小路径)
             secondcostarr1 = min(tempbestmap);
-            tempsecondmap = secondinsertcostmap';   % 求另一次小(secondmap中的最小)
-            secondcostarr2 = min(tempsecondmap);
         end
+        tempsecondmap = secondinsertcostmap';   % 求另一次小(secondmap中的最小)
+        secondcostarr2 = min(tempsecondmap);
         
         % 先看一下未插入节点中，是否有最佳插入代价为inf的，如果有，应该优先处理
         [infpos] = find(bestcostarr == inf);  % 找出最佳插入代价为inf的节点位置
@@ -723,6 +730,7 @@ function [result] = removeNullRoute(routeset, depot)
         routeset(i).route = curroute;
     end
     if isempty(routeset)    % 移除后路径为空
+        fprintf('null!\n');
         routeset = [];
         depot.carindex = 1;
         depot.arrival_time = 0;
