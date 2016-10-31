@@ -25,8 +25,6 @@ load(path);
 % dmax = max(max(distmat));
 % quantitydiffmax = maxquantity - minquantity;
 % [final_path, final_cost] = ALNS(determinednodeset, depot, capacity, capacity*0.8, dmax, quantitydiffmax, n)
-% save('C:\Users\cfinsbear\Documents\DDVRPBTW\DRC102_100temp.mat', 'final_path', 'final_cost','dynamicnodeset', 'determinednodeset', 'codemat')
-load('C:\Users\cfinsbear\Documents\DDVRPBTW\DRC102_100temp.mat');
 indexset = [];
 for i = 1:length(dynamicnodeset)
     indexset = [indexset, dynamicnodeset(i).index];

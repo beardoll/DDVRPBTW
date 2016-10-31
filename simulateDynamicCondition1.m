@@ -20,7 +20,7 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
     routeinfolist = initialrouteset;
     
     % 然后把新到达的顾客需求的时间置入eventlist中
-    for i = 1:length(newcustomerset)
+    for i = 1:length(newcustomerset.nodeset)
         curcustomer = newcustomerset.nodeset(i);
         eventlist = addEventlist(eventlist, curcustomer.proposal_time, 'newdemandarrive', curcustomer.index, -1);
     end
@@ -58,9 +58,9 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
 					servicestarttime = curtime + sqrt((startnode.cx - nextnode.cx)^2+(startnode.cy - nextnode.cy)^2);
 					if servicestarttime < nextnode.start_time
 						servicestarttime = nextnode.start_time;
-                        eventlist = addEventlist(eventlist, servicestarttime, 'service', nextnode.index, nextnode.carindex);
-						eventlist = sortEventlist(eventlist);
-					end
+                    end
+                    eventlist = addEventlist(eventlist, servicestarttime, 'service', nextnode.index, nextnode.carindex);
+					eventlist = sortEventlist(eventlist);
 				end	
                 routeinfolist = newrouteinfolist;
             case 'departure'  % 这时候要确定该货车的下一个出发点
@@ -75,6 +75,7 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
 					eventlist = sortEventlist(eventlist);
 				else
 					nextnodepos = nextnodepos(1);
+                    curroutenode
 					curnode = curroutenode.route(nextnodepos);      % 当前节点
 					nextnode = curroutenode.route(nextnodepos+1);   % 下一个节点
 					servicestarttime = curtime + sqrt((curnode.cx - nextnode.cx)^2 + (curnode.cy - nextnode.cy)^2);
@@ -174,7 +175,8 @@ function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos
                 newroutenode.quantityB = customernode.quantity;
                 newroutenode.quantityL = 0;
         end
-        newroutenode.finishedmark = [];
+        newroutenode.finishedmark = [0];
+        newroutenode.nodeindex = [customernode.index];
         routeinfolist = [routeinfolist, newroutenode];
     else
         selectedroutenode = routeinfolist(bestrouteindex);  % customernode插入到该节点中
@@ -183,12 +185,13 @@ function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos
         temp = [temp, selectedroutenode.nodeindex(1:bestinsertpos-1)];
         temp = [temp, customernode.index];
         temp = [temp, selectedroutenode.nodeindex(bestinsertpos:end)];
-        routeinfolist(bestrouteindex).nodeindex = temp;
+        selectedroutenode.nodeindex = temp;
         temp = [];
         temp = [temp, selectedroutenode.route(1:bestinsertpos)];
         customernode.carindex = bestrouteindex;
         temp = [temp, customernode];
         temp = [temp, selectedroutenode.route(bestinsertpos+1:end)];
+        selectedroutenode.route = temp;
         selectedroutenode.finishedmark = [selectedroutenode.finishedmark, 0];
         switch customernode.type
             case 'L'
@@ -206,6 +209,7 @@ function [mark] = timeWindowJudge(insertpointpos, route, newcustomer)
     time = 0;  % 当前时间为0
     temp = [];
     temp = [temp, route(1:insertpointpos)];
+    newcustomer = rmfield(newcustomer, 'proposal_time');
     temp = [temp newcustomer];
     temp = [temp route(insertpointpos + 1:end)];
     route = temp;
