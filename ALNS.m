@@ -1,4 +1,4 @@
-function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantitymax, n)
+function [final_path, final_cost] = ALNS(nodeset, depot, capacityL, capacityB, dmax, quantitymax, n)
     % adaptive large neighbor search algorithm
     initialrouteset = [];
     depot.carindex = 1;
@@ -8,7 +8,7 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
     routenode.quantityB = 0;
     routenode.nodeindex = [];
     initialrouteset = [initialrouteset, routenode];
-    [initialrouteset] = regretInsert(nodeset, initialrouteset, capacity, 0, 0);
+    [initialrouteset] = regretInsert(nodeset, initialrouteset, capacityL, capacityB, 0, 0);
     
     % 入口参数及出口参数赋值
     currouteset = initialrouteset;
@@ -37,7 +37,7 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
     r = 0.1;
     
     % 其余核心参数
-    maxiter = 25000;  % 总的迭代次数
+    maxiter = 200;  % 总的迭代次数
     segment = 100;  % 每隔一个segment更新removeprob和insertprob
     w = 0.05;
     T = w * curcost / log(2);  % 初始温度
@@ -140,7 +140,7 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
                 else
                     noiseadd = 0;
                 end
-                [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacity, noiseadd, noiseamount);
+                [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacityL, capacityB, noiseadd, noiseamount);
             case 2
                 if noiseprobability > rand    % 以概率选择是否添加噪声影响
                     noiseadd = 1;
@@ -148,7 +148,7 @@ function [final_path, final_cost] = ALNS(nodeset, depot, capacity, dmax, quantit
                 else
                     noiseadd = 0;
                 end
-                [finalrouteset] = regretInsert(removednodeset, removedrouteset, capacity, noiseadd, noiseamount);
+                [finalrouteset] = regretInsert(removednodeset, removedrouteset, capacityL, capacityB, noiseadd, noiseamount);
         end
 %         [nodeindex1c, nodeindex2c] = showNodeindexInRouteSet(finalrouteset)
         [finalrouteset] = removeNullRoute(finalrouteset, depot);   % 移除掉路径集中的空路径
@@ -376,7 +376,7 @@ end
 
 %% ------------------------ insertion algorithms ---------------------- %%
 %% greedy insert
-function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacity, noiseadd, noiseamount)
+function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacityL, capacityB, noiseadd, noiseamount)
     % 贪婪算法，每次都寻找最好的点插入
     % 把removednodeset插入到removedrouteset中
     % 如果没有找到可行插入点，应该再立一条新的路径
@@ -384,7 +384,7 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
     m = length(removednodeset);
     mark = ones(1,m);
     [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] =...
-        computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
+        computeInsertCostMap(removednodeset, removedrouteset, capacityL, capacityB, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
         mincost = min(min(bestinsertcostmap));
         
@@ -460,7 +460,7 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
         mark = ones(1,m);  % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsertposset) = 0;  % 已经插入过的节点置为0
         [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr] =...
-            computeInsertCostMap(removednodeset, operationroutenode, capacity, mark, noiseadd, noiseamount);
+            computeInsertCostMap(removednodeset, operationroutenode, capacityL, capacityB, mark, noiseadd, noiseamount);
         bestinsertcostmap(:,operationrouteindex) = newbestinsertcostarr;
         bestinsertinfomap(:,operationrouteindex) = newbestinsertinfoarr;
         secondinsertcostmap(:,operationrouteindex) = newsecondinsertcostarr;
@@ -469,14 +469,14 @@ function [finalrouteset] = greedyInsert(removednodeset, removedrouteset, capacit
 end
 
 %% regret insert
-function [completerouteset] = regretInsert(removednodeset, removedrouteset, capacity, noiseadd, noiseamount)
+function [completerouteset] = regretInsert(removednodeset, removedrouteset, capacityL, capacityB, noiseadd, noiseamount)
     % 每次选择最好的与次好的只差最大者所对应的节点插入到路径中
     % 其思想是：如果我现在不把这个节点插入，将来要付出更大的代价
     alreadyinsertposset = [];
     m = length(removednodeset);
     mark = ones(1,m);
     [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] =...
-        computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount);
+        computeInsertCostMap(removednodeset, removedrouteset, capacityL, capacityB, mark, noiseadd, noiseamount);
     while length(alreadyinsertposset) < length(removednodeset)
         
         % 先求出各个待插入节点的最小和次小代价
@@ -566,7 +566,7 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
         mark = ones(1,m);                 % 1表示节点还没有插入，0表示节点已经插入
         mark(alreadyinsertposset) = 0;    % 已经插入过的节点置为0
         [newbestinsertcostarr, newbestinsertinfoarr, newsecondinsertcostarr] =...
-            computeInsertCostMap(removednodeset, operationroutenode, capacity, mark, noiseadd, noiseamount);
+            computeInsertCostMap(removednodeset, operationroutenode, capacityL, capacityB, mark, noiseadd, noiseamount);
         bestinsertcostmap(:,operationrouteindex) = newbestinsertcostarr;
         bestinsertinfomap(:,operationrouteindex) = newbestinsertinfoarr;
         secondinsertcostmap(:,operationrouteindex) = newsecondinsertcostarr;
@@ -575,7 +575,7 @@ function [completerouteset] = regretInsert(removednodeset, removedrouteset, capa
 end
 
 %% 附加函数
-function [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] = computeInsertCostMap(removednodeset, removedrouteset, capacity, mark, noiseadd, noiseamount)
+function [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] = computeInsertCostMap(removednodeset, removedrouteset, capacityL, capacityB, mark, noiseadd, noiseamount)
     % 计算removednodeset中节点插入到removedrouteset中的每条路径的最小和次小插入代价
     % bestinsertcostmap: 各个节点在各条路径中的最小插入代价，secondxxx为次小
     % bestinsertinfomap: 各个节点在各条路径的最小插入点信息，secondxxx为次小
@@ -600,7 +600,7 @@ function [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] = computeIn
                     switch curnode.type
                         case 'L'
                             if insertnode.type == 'D' || insertnode.type == 'L' % 是可插入点
-                                if curroutenode.quantityL + curnode.quantity < capacity  % 满足容量约束
+                                if curroutenode.quantityL + curnode.quantity < capacityL  % 满足容量约束
                                     if timeWindowJudge(k, curroute, curnode) == 1   % 满足时间窗约束
                                         temp = sqrt((insertnode.cx-curnode.cx)^2 + (insertnode.cy-curnode.cy)^2) +...
                                                sqrt((successor.cx-curnode.cx)^2 + (successor.cy-curnode.cy)^2) -...
@@ -619,7 +619,7 @@ function [bestinsertcostmap, bestinsertinfomap, secondinsertcostmap] = computeIn
                             end
                         case 'B'
                             if insertnode.type == 'L' && successor.type == 'B' || insertnode.type == 'L' && successor.type == 'D' ||insertnode.type == 'B'
-                                if curroutenode.quantityB + curnode.quantity < capacity  % 满足容量约束
+                                if curroutenode.quantityB + curnode.quantity < capacityB  % 满足容量约束
                                     if timeWindowJudge(k, curroute, curnode) == 1   % 满足时间窗约束
                                         temp = sqrt((insertnode.cx-curnode.cx)^2 + (insertnode.cy-curnode.cy)^2) +...
                                                sqrt((successor.cx-curnode.cx)^2 + (successor.cy-curnode.cy)^2) -...

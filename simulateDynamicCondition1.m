@@ -1,9 +1,8 @@
-function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset, newcustomerset)
-    % newcustomerset: eachnode: index, proposal_time, cx, cy, quantity, type
-    %                   itself: indexset -- 便于索引某个index对应的customer在哪里                   
+function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset, newcustomerset, capacity)
+    % newcustomerset: eachnode: index, proposal_time, cx, cy, quantity, type     
+    % indexset
     
     eventlist = [];  % 时间表，用以触发状态机
-    
     % 首先把初始路径的第一个顾客节点接受服务的事件录入到eventlist中
     for i = 1:length(initialrouteset)
        curroute = initialrouteset(i).route;
@@ -14,8 +13,7 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
        if servicestarttime < firstnode.start_time
            servicestarttime = firstnode.start_time;
        end
-       listelement = [servicestarttime, 'service', firstnode.index, firstnode.carindex];    % 服务顾客
-       eventlist(length(eventlist)+1,:) = listelement;
+       eventlist = addEventlist(eventlist, servicestarttime, 'service', firstnode.index, firstnode.carindex);
     end
     
     % 换个名字
@@ -23,9 +21,8 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
     
     % 然后把新到达的顾客需求的时间置入eventlist中
     for i = 1:length(newcustomerset)
-        curcustomer = newcustomerset(i);
-        listelement = [curcustomer.proposal_time, 'newdemandarrive', curcustomer.index, -1];  % 新到达的顾客还没有分配路径
-        eventlist(length(eventlist)+1,:) = listelement;
+        curcustomer = newcustomerset.nodeset(i);
+        eventlist = addEventlist(eventlist, curcustomer.proposal_time, 'newdemandarrive', curcustomer.index, -1);
     end
     
     % 按时间对eventlist进行排序
@@ -34,27 +31,26 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
     % 执行状态机
 	backtimetable = [];  % 各车辆返回仓库的时间表
     while isempty(eventlist) == 0  
-        curevent = eventlist(1,:);
-		curtime = curevent(1);
-        eventlist(1,:) = [];  % 删除掉该事件
-        switch curevent(2)
+        curevent = eventlist(1);
+		curtime = curevent.time;
+        eventlist(1) = [];  % 删除掉该事件
+        switch curevent.type
             case 'service'   % 在此处定义服务完成时间
-                routeindex = curevent(4);
+                routeindex = curevent.carindex;
                 finishedmark = routeinfolist(routeindex).finishedmark;
                 curfinishedpos = find(finishedmark == 0);  % 当前服务的节点在nodeindex中的位置
                 curfinishedpos = curfinishedpos(1);
 				onservicenode = routeinfolist(routeindex).route(curfinishedpos+1);  % 当前接受服务的节点
                 finishedmark(curfinishedpos) = 1;  % 标记该位置的节点已走过
 				departuretime = curtime + onservicenode.service_time;
-				listelement = [departuretime, 'departure', onservicenode.index, onservicenode.carindex];    % 车辆出发
-				eventlist(length(eventlist)+1,:) = listelement;
+                eventlist = addEventlist(eventlist, departuretime, 'departure', onservicenode.index, onservicenode.carindex);
 				eventlist = sortEventlist(eventlist);
                 routeinfolist(routeindex).finishedmark = finishedmark;
             case 'newdemandarrive'
-                index = curevent(3);
+                index = curevent.nodeindex;
                 customerpos = find(index == newcustomerset.indexset);
-                customernode = newcustomerset(customerpos);
-                [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos(customernode, routeinfolist);
+                customernode = newcustomerset.nodeset(customerpos);
+                [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos(customernode, routeinfolist, capacity);
 				if bestrouteindex == -1   % 如果没有可行路径，需要手动添加服务开始事件，因为这是新路径的第一个节点
 					newroutenode = newrouteinfolist(end);   % 新增加的路径
 					startnode = newroutenode.route(1);
@@ -62,22 +58,20 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
 					servicestarttime = curtime + sqrt((startnode.cx - nextnode.cx)^2+(startnode.cy - nextnode.cy)^2);
 					if servicestarttime < nextnode.start_time
 						servicestarttime = nextnode.start_time;
-						listelement = [servicestarttime, 'service', nextnode.index, nextnode.carindex];    % 服务顾客
-						eventlist(length(eventlist)+1,:) = listelement;
+                        eventlist = addEventlist(eventlist, servicestarttime, 'service', nextnode.index, nextnode.carindex);
 						eventlist = sortEventlist(eventlist);
 					end
 				end	
                 routeinfolist = newrouteinfolist;
             case 'departure'  % 这时候要确定该货车的下一个出发点
-                routeindex = curevent(4);
+                routeindex = curevent.carindex;
                 curroutenode = routeinfolist(routeindex);
                 nextnodepos = find(curroutenode.finishedmark == 0);
 				if isempty(nextnodepos) == 1  % 如果此路径的所有节点已经走完，则应该回到仓库
 					depot = curroutenode.route(end);
 					lastnode = curroutenode.route(end-1);
 					backtime = curtime + sqrt((lastnode.cx - depot.cx)^2 + (lastnode.cy - depot.cy)^2);
-					listelement = [backtime, 'back', lastnode.index, lastnode.carindex];    % 车辆返回仓库
-					eventlist(length(eventlist)+1,:) = listelement;
+                    eventlist = addEventlist(eventlist, backtime, 'backtime', lastnode.index, lastnode.carindex);
 					eventlist = sortEventlist(eventlist);
 				else
 					nextnodepos = nextnodepos(1);
@@ -86,13 +80,12 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
 					servicestarttime = curtime + sqrt((curnode.cx - nextnode.cx)^2 + (curnode.cy - nextnode.cy)^2);
 					if servicestarttime < nextnode.start_time
 						servicestarttime = nextnode.start_time;
-					end
-					listelement = [servicestarttime, 'service', nextnode.index, nextnode.carindex];    % 车辆返回仓库
-					eventlist(length(eventlist)+1,:) = listelement;
+                    end
+                    eventlist = addEventlist(eventlist, servicestarttime, 'service', nextnode.index, nextnode.carindex);
 					eventlist = sortEventlist(eventlist);
 				end
 			case 'back'
-				backtimetable(length(backtimetable)+1,:) = [curevent(1), curevent(4)];
+				backtimetable(length(backtimetable)+1,:) = [curevent.time, curevent.carindex];
         end
     end  
 	finalrouteset = routeinfolist;
@@ -100,12 +93,26 @@ function [finalrouteset, finalcost] = simulateDynamicCondition1(initialrouteset,
 end
 
 function [neweventlist] = sortEventlist(initialeventlist)
-    timetable = initialeventlist(:,1);  % 取出时间表的事件
-    [sortresult, sortindex] = sort(timetable, 'ascend');
-    neweventlist = initialeventlist(sortindex,:);
+    % 按时间顺序对initialeventlist进行排序
+    eventlistlen = length(initialeventlist);
+    timetable = [];
+    for i = 1:eventlistlen
+        timetable = [timetable, initialeventlist(i).time];
+    end
+    [sortresult, sortindex] = sort(timetable);
+    neweventlist = initialeventlist(sortindex);
 end
 
-function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos(customernode, routeinfolist)
+function [neweventlist] = addEventlist(initialeventlist, time, type, nodeindex, carindex)
+    eventlistlen = length(initialeventlist);
+    initialeventlist(eventlistlen+1).time = time;
+    initialeventlist(eventlistlen+1).type = type;
+    initialeventlist(eventlistlen+1).nodeindex = nodeindex;
+    initialeventlist(eventlistlen+1).carindex = carindex;
+    neweventlist = initialeventlist;
+end
+
+function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos(customernode, routeinfolist, capacity)
     % 为customernode寻找最佳插入位置和相应的路径
     bestcost = inf;
     bestrouteindex = -1;
@@ -125,7 +132,7 @@ function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos
                 case 'L'
                     if predecessor.type == 'D' || predecessor.type == 'L' % 是可插入点
                         if curroutenode.quantityL + customernode.quantity < capacity  % 满足容量约束
-                            if timeWindowJudge(j, curroutenode.route, newcustomer) == 1  % 满足时间窗约束
+                            if timeWindowJudge(j, curroutenode.route, customernode) == 1  % 满足时间窗约束
                                 temp = sqrt((predecessor.cx - customernode.cx)^2 + (predecessor.cy - customernode.cy)^2);
                                 if temp < bestcost
                                     bestcost = temp;
@@ -138,7 +145,7 @@ function [bestrouteindex, bestinsertpos, newrouteinfolist] = searchBestInsertPos
                 case 'B'
                     if predecessor.type == 'L' && successor.type == 'B' || predecessor.type == 'L' && successor.type == 'D' || predecessor.type == 'B'
                         if curroutenode.quantityB + customernode.quantity < capacity  % 满足容量约束
-                            if timeWindowJudge(j, curroutenode.route, newcustomer) == 1  % 满足时间窗约束
+                            if timeWindowJudge(j, curroutenode.route, customernode) == 1  % 满足时间窗约束
                                 temp = sqrt((predecessor.cx - customernode.cx)^2 + (predecessor.cy - customernode.cy)^2);
                                 if temp < bestcost
                                     bestcost = temp;
